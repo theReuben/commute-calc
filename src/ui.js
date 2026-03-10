@@ -1,4 +1,4 @@
-import { TIME_COLORS } from './config.js';
+import { TIME_COLORS, ENV_GEOAPIFY_API_KEY } from './config.js';
 
 /**
  * Show a status message in the sidebar.
@@ -74,12 +74,24 @@ export function getSelectedIntervals() {
 }
 
 /**
- * Get the API key from the input field.
+ * Get the API key from the input field, falling back to the environment variable.
  * @returns {string}
  */
 export function getApiKey() {
   const el = document.getElementById('api-key');
-  return el ? el.value.trim() : '';
+  const inputValue = el ? el.value.trim() : '';
+  return inputValue || ENV_GEOAPIFY_API_KEY;
+}
+
+/**
+ * Pre-populate the API key input from the environment variable if available.
+ */
+export function initApiKey() {
+  if (!ENV_GEOAPIFY_API_KEY) return;
+  const el = document.getElementById('api-key');
+  if (el && !el.value) {
+    el.value = ENV_GEOAPIFY_API_KEY;
+  }
 }
 
 /**
@@ -132,4 +144,66 @@ export function showSearchResults(results, onSelect) {
 export function hideSearchResults() {
   const container = document.getElementById('search-results');
   if (container) container.hidden = true;
+}
+
+/**
+ * Show property search links in the sidebar.
+ * @param {Array<{name: string, emoji: string, url: string}>} links
+ */
+export function showPropertyLinks(links) {
+  const container = document.getElementById('property-links');
+  if (!container) return;
+
+  if (links.length === 0) {
+    container.hidden = true;
+    return;
+  }
+
+  const linksEl = container.querySelector('.property-links-list');
+  if (!linksEl) return;
+
+  linksEl.innerHTML = '';
+  links.forEach((link) => {
+    const a = document.createElement('a');
+    a.href = link.url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.className = 'property-link';
+    a.textContent = `${link.emoji} ${link.name}`;
+    linksEl.appendChild(a);
+  });
+
+  container.hidden = false;
+}
+
+/**
+ * Hide the property links section.
+ */
+export function hidePropertyLinks() {
+  const container = document.getElementById('property-links');
+  if (container) container.hidden = true;
+}
+
+/**
+ * Get the currently selected property listing type (buy or rent).
+ * @returns {'buy'|'rent'}
+ */
+export function getSelectedListingType() {
+  const active = document.querySelector('.property-type-btn.active');
+  return active ? active.dataset.listing : 'buy';
+}
+
+/**
+ * Set up property listing type toggle (buy/rent) button handlers.
+ * @param {function} [onChange] - Optional callback when listing type changes.
+ */
+export function setupPropertyTypeToggle(onChange) {
+  const buttons = document.querySelectorAll('.property-type-btn');
+  buttons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      buttons.forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (onChange) onChange(btn.dataset.listing);
+    });
+  });
 }

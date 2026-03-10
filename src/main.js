@@ -1,6 +1,7 @@
 import { createMap } from './map.js';
 import { geocodeAddress } from './geocode.js';
 import { fetchIsochrones } from './isochrone.js';
+import { getPropertySearchLinks } from './properties.js';
 import {
   showStatus,
   hideStatus,
@@ -8,9 +9,14 @@ import {
   getSelectedMode,
   getSelectedIntervals,
   getApiKey,
+  initApiKey,
   setupModeButtons,
   showSearchResults,
   hideSearchResults,
+  showPropertyLinks,
+  hidePropertyLinks,
+  getSelectedListingType,
+  setupPropertyTypeToggle,
 } from './ui.js';
 
 /**
@@ -18,6 +24,9 @@ import {
  */
 export function initApp() {
   const mapInstance = createMap('map');
+
+  // Pre-populate API key from environment variable if available
+  initApiKey();
 
   // Set up transport mode switching
   setupModeButtons();
@@ -72,6 +81,8 @@ export function initApp() {
 
   // Calculate button
   const calculateBtn = document.getElementById('calculate-btn');
+  let lastSearchLocation = '';
+
   calculateBtn.addEventListener('click', async () => {
     const location = mapInstance.getWorkLocation();
     if (!location) {
@@ -108,10 +119,25 @@ export function initApp() {
       mapInstance.showIsochrones(geojson);
       updateLegend(intervals);
       showStatus('Commute areas calculated successfully!', 'success');
+
+      // Show property search links for the work location
+      lastSearchLocation = searchInput.value.trim() || `${location.lat.toFixed(4)},${location.lon.toFixed(4)}`;
+      const listingType = getSelectedListingType();
+      const links = getPropertySearchLinks(lastSearchLocation, listingType);
+      showPropertyLinks(links);
     } catch (err) {
       showStatus(`Error: ${err.message}`, 'error');
     } finally {
       calculateBtn.disabled = false;
+    }
+  });
+
+  // Property listing type toggle (buy/rent)
+  setupPropertyTypeToggle(() => {
+    if (lastSearchLocation) {
+      const listingType = getSelectedListingType();
+      const links = getPropertySearchLinks(lastSearchLocation, listingType);
+      showPropertyLinks(links);
     }
   });
 }

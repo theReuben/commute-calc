@@ -6,9 +6,14 @@ import {
   getSelectedMode,
   getSelectedIntervals,
   getApiKey,
+  initApiKey,
   showSearchResults,
   hideSearchResults,
   setupModeButtons,
+  showPropertyLinks,
+  hidePropertyLinks,
+  getSelectedListingType,
+  setupPropertyTypeToggle,
 } from '../src/ui.js';
 
 function setupDOM() {
@@ -28,6 +33,13 @@ function setupDOM() {
     </div>
     <input type="text" id="api-key" value="" />
     <div id="search-results" hidden></div>
+    <div id="property-links" class="property-section" hidden>
+      <div class="property-type-toggle">
+        <button class="property-type-btn active" data-listing="buy">Buy</button>
+        <button class="property-type-btn" data-listing="rent">Rent</button>
+      </div>
+      <div class="property-links-list"></div>
+    </div>
   `;
 }
 
@@ -160,6 +172,81 @@ describe('ui', () => {
       setupModeButtons();
       const buttons = document.querySelectorAll('.mode-btn');
       expect(() => buttons[1].click()).not.toThrow();
+    });
+  });
+
+  describe('initApiKey', () => {
+    it('does not throw when env var is empty', () => {
+      expect(() => initApiKey()).not.toThrow();
+    });
+
+    it('does not overwrite existing input value', () => {
+      document.getElementById('api-key').value = 'user-key';
+      initApiKey();
+      expect(document.getElementById('api-key').value).toBe('user-key');
+    });
+  });
+
+  describe('showPropertyLinks', () => {
+    it('displays property links in the container', () => {
+      const links = [
+        { name: 'Rightmove', emoji: '🏠', url: 'https://rightmove.co.uk/test' },
+        { name: 'Zoopla', emoji: '🔍', url: 'https://zoopla.co.uk/test' },
+      ];
+      showPropertyLinks(links);
+      const container = document.getElementById('property-links');
+      expect(container.hidden).toBe(false);
+      const linkEls = container.querySelectorAll('.property-link');
+      expect(linkEls.length).toBe(2);
+      expect(linkEls[0].href).toContain('rightmove.co.uk');
+      expect(linkEls[0].target).toBe('_blank');
+      expect(linkEls[0].rel).toContain('noopener');
+    });
+
+    it('hides container when links array is empty', () => {
+      showPropertyLinks([]);
+      expect(document.getElementById('property-links').hidden).toBe(true);
+    });
+  });
+
+  describe('hidePropertyLinks', () => {
+    it('hides the property links container', () => {
+      showPropertyLinks([{ name: 'Test', emoji: '🏠', url: 'https://test.com' }]);
+      hidePropertyLinks();
+      expect(document.getElementById('property-links').hidden).toBe(true);
+    });
+  });
+
+  describe('getSelectedListingType', () => {
+    it('returns buy by default', () => {
+      expect(getSelectedListingType()).toBe('buy');
+    });
+
+    it('returns buy when no active button', () => {
+      document.querySelectorAll('.property-type-btn').forEach((b) => b.classList.remove('active'));
+      expect(getSelectedListingType()).toBe('buy');
+    });
+  });
+
+  describe('setupPropertyTypeToggle', () => {
+    it('toggles active class between buy and rent buttons', () => {
+      setupPropertyTypeToggle();
+      const buttons = document.querySelectorAll('.property-type-btn');
+      expect(buttons[0].classList.contains('active')).toBe(true);
+      expect(buttons[1].classList.contains('active')).toBe(false);
+
+      buttons[1].click();
+      expect(buttons[0].classList.contains('active')).toBe(false);
+      expect(buttons[1].classList.contains('active')).toBe(true);
+    });
+
+    it('calls onChange callback with the selected listing type', () => {
+      const onChange = vi.fn();
+      setupPropertyTypeToggle(onChange);
+      const buttons = document.querySelectorAll('.property-type-btn');
+
+      buttons[1].click();
+      expect(onChange).toHaveBeenCalledWith('rent');
     });
   });
 });
