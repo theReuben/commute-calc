@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   showStatus,
   hideStatus,
@@ -8,6 +8,7 @@ import {
   getApiKey,
   showSearchResults,
   hideSearchResults,
+  setupModeButtons,
 } from '../src/ui.js';
 
 function setupDOM() {
@@ -129,6 +130,36 @@ describe('ui', () => {
       showSearchResults([{ displayName: 'Test', lat: 0, lon: 0 }], () => {});
       hideSearchResults();
       expect(document.getElementById('search-results').hidden).toBe(true);
+    });
+  });
+
+  describe('setupModeButtons', () => {
+    it('adds active class to clicked button and removes from others', () => {
+      setupModeButtons();
+      const buttons = document.querySelectorAll('.mode-btn');
+      // Initially first button is active
+      expect(buttons[0].classList.contains('active')).toBe(true);
+      expect(buttons[1].classList.contains('active')).toBe(false);
+
+      // Click second button
+      buttons[1].click();
+      expect(buttons[0].classList.contains('active')).toBe(false);
+      expect(buttons[1].classList.contains('active')).toBe(true);
+    });
+
+    it('calls onChange callback with the selected mode', () => {
+      const onChange = vi.fn();
+      setupModeButtons(onChange);
+      const buttons = document.querySelectorAll('.mode-btn');
+
+      buttons[1].click();
+      expect(onChange).toHaveBeenCalledWith('bicycle');
+    });
+
+    it('does not throw when onChange is not provided', () => {
+      setupModeButtons();
+      const buttons = document.querySelectorAll('.mode-btn');
+      expect(() => buttons[1].click()).not.toThrow();
     });
   });
 });

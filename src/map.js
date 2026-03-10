@@ -75,7 +75,7 @@ export function createMap(elementId) {
   /**
    * Display isochrone GeoJSON on the map.
    * Features are sorted so larger (longer time) polygons render behind smaller ones.
-   * @param {Object} geojson - GeoJSON FeatureCollection from ORS.
+   * @param {Object} geojson - GeoJSON FeatureCollection from Geoapify.
    */
   function showIsochrones(geojson) {
     clearIsochrones();

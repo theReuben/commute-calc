@@ -1,4 +1,4 @@
-import { TIME_COLORS, TRANSPORT_MODES } from './config.js';
+import { TIME_COLORS } from './config.js';
 
 /**
  * Show a status message in the sidebar.

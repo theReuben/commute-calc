@@ -60,15 +60,15 @@ describe('isochrone', () => {
     });
 
     it('makes parallel requests for multiple intervals', async () => {
-      const makeMock = (seconds) => ({
+      const makeMock = () => ({
         type: 'FeatureCollection',
         features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [] } }],
       });
 
       const mockFetch = vi.fn()
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(makeMock(600)) })
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(makeMock(1200)) })
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(makeMock(1800)) });
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(makeMock()) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(makeMock()) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(makeMock()) });
       vi.stubGlobal('fetch', mockFetch);
 
       const result = await fetchIsochrones({
