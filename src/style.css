@@ -235,6 +235,33 @@ body {
   border: 1px solid rgba(0, 0, 0, 0.15);
 }
 
+.crime-section {
+  padding: 12px;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+}
+
+.crime-section h3 {
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+  color: #495057;
+}
+
+.crime-overlay-toggle {
+  margin-bottom: 6px;
+}
+
+.crime-status {
+  font-size: 0.75rem;
+  color: #495057;
+  padding: 4px 0;
+}
+
+.crime-legend {
+  padding: 4px 0;
+}
+
 @media (max-width: 768px) {
   #app {
     flex-direction: column;

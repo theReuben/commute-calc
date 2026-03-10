@@ -6,9 +6,16 @@ import {
   getSelectedMode,
   getSelectedIntervals,
   getApiKey,
+  initApiKey,
   showSearchResults,
   hideSearchResults,
   setupModeButtons,
+  isCrimeOverlayEnabled,
+  setupCrimeOverlayToggle,
+  showCrimeStatus,
+  hideCrimeStatus,
+  showCrimeLegend,
+  hideCrimeLegend,
 } from '../src/ui.js';
 
 function setupDOM() {
@@ -28,6 +35,16 @@ function setupDOM() {
     </div>
     <input type="text" id="api-key" value="" />
     <div id="search-results" hidden></div>
+    <div id="crime-section" class="crime-section">
+      <label class="checkbox-label crime-overlay-toggle">
+        <input type="checkbox" id="crime-overlay" checked />
+        Show crime data on map
+      </label>
+      <div id="crime-status" class="crime-status" hidden></div>
+      <div id="crime-legend" class="crime-legend" hidden>
+        <div id="crime-legend-items"></div>
+      </div>
+    </div>
   `;
 }
 
@@ -99,8 +116,14 @@ describe('ui', () => {
       expect(getApiKey()).toBe('my-key');
     });
 
-    it('returns empty string for empty input', () => {
+    it('returns empty string when input field is empty', () => {
       expect(getApiKey()).toBe('');
+    });
+  });
+
+  describe('initApiKey', () => {
+    it('does not throw when called', () => {
+      expect(() => initApiKey()).not.toThrow();
     });
   });
 
@@ -160,6 +183,69 @@ describe('ui', () => {
       setupModeButtons();
       const buttons = document.querySelectorAll('.mode-btn');
       expect(() => buttons[1].click()).not.toThrow();
+    });
+  });
+
+  describe('isCrimeOverlayEnabled', () => {
+    it('returns true when checkbox is checked', () => {
+      expect(isCrimeOverlayEnabled()).toBe(true);
+    });
+
+    it('returns false when checkbox is unchecked', () => {
+      document.getElementById('crime-overlay').checked = false;
+      expect(isCrimeOverlayEnabled()).toBe(false);
+    });
+  });
+
+  describe('setupCrimeOverlayToggle', () => {
+    it('calls onChange with checked state when toggled', () => {
+      const onChange = vi.fn();
+      setupCrimeOverlayToggle(onChange);
+      const checkbox = document.getElementById('crime-overlay');
+      checkbox.checked = false;
+      checkbox.dispatchEvent(new Event('change'));
+      expect(onChange).toHaveBeenCalledWith(false);
+    });
+  });
+
+  describe('showCrimeStatus', () => {
+    it('displays text in the status element', () => {
+      showCrimeStatus('42 crimes reported');
+      const el = document.getElementById('crime-status');
+      expect(el.textContent).toBe('42 crimes reported');
+      expect(el.hidden).toBe(false);
+    });
+  });
+
+  describe('hideCrimeStatus', () => {
+    it('hides the status element', () => {
+      showCrimeStatus('test');
+      hideCrimeStatus();
+      expect(document.getElementById('crime-status').hidden).toBe(true);
+    });
+  });
+
+  describe('showCrimeLegend', () => {
+    it('displays legend items for each density level', () => {
+      const colorMap = {
+        low: { fillColor: '#2b8a3e', label: 'Low crime' },
+        medium: { fillColor: '#f59f00', label: 'Medium crime' },
+        high: { fillColor: '#e03131', label: 'High crime' },
+        'very-high': { fillColor: '#7b2d8e', label: 'Very high crime' },
+      };
+      showCrimeLegend(colorMap);
+      const legend = document.getElementById('crime-legend');
+      expect(legend.hidden).toBe(false);
+      const items = legend.querySelectorAll('.legend-item');
+      expect(items.length).toBe(4);
+    });
+  });
+
+  describe('hideCrimeLegend', () => {
+    it('hides the crime legend', () => {
+      showCrimeLegend({ low: { fillColor: '#2b8a3e', label: 'Low' } });
+      hideCrimeLegend();
+      expect(document.getElementById('crime-legend').hidden).toBe(true);
     });
   });
 });

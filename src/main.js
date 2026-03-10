@@ -1,6 +1,7 @@
 import { createMap } from './map.js';
 import { geocodeAddress } from './geocode.js';
 import { fetchIsochrones } from './isochrone.js';
+import { fetchCrimeData, aggregateCrimes, classifyCrimeDensity, CRIME_COLORS } from './crimeData.js';
 import {
   showStatus,
   hideStatus,
@@ -8,9 +9,16 @@ import {
   getSelectedMode,
   getSelectedIntervals,
   getApiKey,
+  initApiKey,
   setupModeButtons,
   showSearchResults,
   hideSearchResults,
+  isCrimeOverlayEnabled,
+  setupCrimeOverlayToggle,
+  showCrimeStatus,
+  hideCrimeStatus,
+  showCrimeLegend,
+  hideCrimeLegend,
 } from './ui.js';
 
 /**
@@ -18,6 +26,9 @@ import {
  */
 export function initApp() {
   const mapInstance = createMap('map');
+
+  // Pre-populate API key from environment variable if available
+  initApiKey();
 
   // Set up transport mode switching
   setupModeButtons();
@@ -72,6 +83,8 @@ export function initApp() {
 
   // Calculate button
   const calculateBtn = document.getElementById('calculate-btn');
+  let lastGeojson = null;
+
   calculateBtn.addEventListener('click', async () => {
     const location = mapInstance.getWorkLocation();
     if (!location) {
@@ -107,11 +120,58 @@ export function initApp() {
 
       mapInstance.showIsochrones(geojson);
       updateLegend(intervals);
+      lastGeojson = geojson;
+
+      // Fetch crime data overlay if enabled
+      if (isCrimeOverlayEnabled()) {
+        await loadCrimeOverlay(geojson);
+      }
+
       showStatus('Commute areas calculated successfully!', 'success');
     } catch (err) {
       showStatus(`Error: ${err.message}`, 'error');
     } finally {
       calculateBtn.disabled = false;
+    }
+  });
+
+  /**
+   * Load crime data and display the overlay on the map.
+   * @param {Object} geojson - Isochrone GeoJSON FeatureCollection.
+   */
+  async function loadCrimeOverlay(geojson) {
+    try {
+      showCrimeStatus('Loading crime data...');
+      const crimes = await fetchCrimeData({ geojson });
+      const grid = aggregateCrimes(crimes);
+      const maxCount = grid.reduce((max, cell) => Math.max(max, cell.count), 0);
+
+      const gridWithDensity = grid.map((cell) => ({
+        ...cell,
+        density: classifyCrimeDensity(cell.count, maxCount),
+      }));
+
+      mapInstance.showCrimeOverlay(gridWithDensity, CRIME_COLORS);
+      showCrimeLegend(CRIME_COLORS);
+
+      if (crimes.length > 0) {
+        showCrimeStatus(`${crimes.length} crime${crimes.length !== 1 ? 's' : ''} reported in commute area`);
+      } else {
+        showCrimeStatus('No recent crime data available for this area');
+      }
+    } catch (err) {
+      showCrimeStatus(`Crime data: ${err.message}`);
+    }
+  }
+
+  // Crime overlay toggle
+  setupCrimeOverlayToggle((enabled) => {
+    if (enabled && lastGeojson) {
+      loadCrimeOverlay(lastGeojson);
+    } else {
+      mapInstance.clearCrimeOverlay();
+      hideCrimeStatus();
+      hideCrimeLegend();
     }
   });
 }

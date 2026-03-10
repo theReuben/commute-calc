@@ -16,6 +16,7 @@ export function createMap(elementId) {
 
   let workMarker = null;
   let isochroneLayer = L.layerGroup().addTo(map);
+  let crimeLayer = L.layerGroup().addTo(map);
   let markerDragCallback = null;
 
   /**
@@ -135,12 +136,75 @@ export function createMap(elementId) {
     markerDragCallback = callback;
   }
 
+  /**
+   * Display crime density markers on the map.
+   * @param {Array<{lat: number, lon: number, count: number, density: string, categories: Object}>} gridCells
+   * @param {Object} colorMap - Maps density levels to {fillColor, color}.
+   */
+  function showCrimeOverlay(gridCells, colorMap) {
+    clearCrimeOverlay();
+
+    gridCells.forEach((cell) => {
+      const colors = colorMap[cell.density] || { fillColor: '#adb5bd', color: '#495057' };
+      // Radius: base 4px, log-scaled by count (factor 3), capped at 16px
+      const radius = Math.min(4 + Math.log2(cell.count + 1) * 3, 16);
+
+      const marker = L.circleMarker([cell.lat, cell.lon], {
+        radius,
+        fillColor: colors.fillColor,
+        color: colors.color,
+        weight: 1.5,
+        opacity: 0.8,
+        fillOpacity: 0.55,
+      }).addTo(crimeLayer);
+
+      // Build category breakdown sorted by count
+      const sortedCategories = Object.entries(cell.categories)
+        .sort((a, b) => b[1] - a[1]);
+
+      // Tooltip on hover — compact summary with top crime type
+      const topCat = sortedCategories[0];
+      const tooltipText = topCat
+        ? `${cell.count} crime${cell.count !== 1 ? 's' : ''} — ${escapeHtml(formatCrimeCategory(topCat[0]))}`
+        : `${cell.count} crime${cell.count !== 1 ? 's' : ''}`;
+      marker.bindTooltip(tooltipText, { direction: 'top', offset: [0, -6] });
+
+      // Popup on click — full category breakdown
+      const allCategories = sortedCategories
+        .map(([cat, n]) => `${escapeHtml(formatCrimeCategory(cat))}: ${n}`)
+        .join('<br>');
+      marker.bindPopup(
+        `<strong>${cell.count} crime${cell.count !== 1 ? 's' : ''}</strong><br>${allCategories}`
+      );
+    });
+  }
+
+  /**
+   * Remove all crime overlay markers from the map.
+   */
+  function clearCrimeOverlay() {
+    crimeLayer.clearLayers();
+  }
+
+  /**
+   * Format a crime category slug into a readable label.
+   * @param {string} category
+   * @returns {string}
+   */
+  function formatCrimeCategory(category) {
+    return category
+      .replace(/-/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
   return {
     map,
     setWorkLocation,
     getWorkLocation,
     showIsochrones,
     clearIsochrones,
+    showCrimeOverlay,
+    clearCrimeOverlay,
     onMapClick,
     onMarkerDrag,
   };

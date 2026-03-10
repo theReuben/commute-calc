@@ -32,3 +32,14 @@ export const GEOAPIFY_ISOLINE_URL = 'https://api.geoapify.com/v1/isoline';
 
 /** Nominatim geocoding API URL */
 export const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
+
+/** UK Police API base URL (no API key required) */
+export const POLICE_API_URL = 'https://data.police.uk/api';
+
+/**
+ * Geoapify API key from environment variable (set via VITE_GEOAPIFY_API_KEY).
+ * Falls back to empty string if not configured.
+ */
+export const ENV_GEOAPIFY_API_KEY = typeof import.meta !== 'undefined' && import.meta.env
+  ? (import.meta.env.VITE_GEOAPIFY_API_KEY || '')
+  : '';

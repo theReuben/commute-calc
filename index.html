@@ -77,6 +77,7 @@
           <a href="https://myprojects.geoapify.com/register" target="_blank" rel="noopener noreferrer">
             geoapify.com
           </a>
+          — or set <code>VITE_GEOAPIFY_API_KEY</code> in your environment.
         </p>
       </div>
 
@@ -89,6 +90,19 @@
       <div id="legend" class="legend" hidden>
         <h3>Commute Time</h3>
         <div id="legend-items"></div>
+      </div>
+
+      <div id="crime-section" class="crime-section">
+        <h3>🔍 Area Safety</h3>
+        <label class="checkbox-label crime-overlay-toggle">
+          <input type="checkbox" id="crime-overlay" checked />
+          Show crime data on map
+        </label>
+        <div id="crime-status" class="crime-status" hidden></div>
+        <div id="crime-legend" class="crime-legend" hidden>
+          <div id="crime-legend-items"></div>
+        </div>
+        <p class="hint">Crime data from <a href="https://data.police.uk" target="_blank" rel="noopener noreferrer">data.police.uk</a> (UK only, most recent month)</p>
       </div>
     </div>
 

@@ -1,4 +1,4 @@
-import { TIME_COLORS } from './config.js';
+import { TIME_COLORS, ENV_GEOAPIFY_API_KEY } from './config.js';
 
 /**
  * Show a status message in the sidebar.
@@ -74,12 +74,24 @@ export function getSelectedIntervals() {
 }
 
 /**
- * Get the API key from the input field.
+ * Get the API key from the input field, falling back to the environment variable.
  * @returns {string}
  */
 export function getApiKey() {
   const el = document.getElementById('api-key');
-  return el ? el.value.trim() : '';
+  const inputValue = el ? el.value.trim() : '';
+  return inputValue || ENV_GEOAPIFY_API_KEY;
+}
+
+/**
+ * Pre-populate the API key input from the environment variable if available.
+ */
+export function initApiKey() {
+  if (!ENV_GEOAPIFY_API_KEY) return;
+  const el = document.getElementById('api-key');
+  if (el && !el.value) {
+    el.value = ENV_GEOAPIFY_API_KEY;
+  }
 }
 
 /**
@@ -132,4 +144,79 @@ export function showSearchResults(results, onSelect) {
 export function hideSearchResults() {
   const container = document.getElementById('search-results');
   if (container) container.hidden = true;
+}
+
+/**
+ * Check if the crime overlay checkbox is enabled.
+ * @returns {boolean}
+ */
+export function isCrimeOverlayEnabled() {
+  const el = document.getElementById('crime-overlay');
+  return el ? el.checked : false;
+}
+
+/**
+ * Set up crime overlay toggle change handler.
+ * @param {function} onChange - Callback with (enabled: boolean).
+ */
+export function setupCrimeOverlayToggle(onChange) {
+  const el = document.getElementById('crime-overlay');
+  if (el) {
+    el.addEventListener('change', () => {
+      if (onChange) onChange(el.checked);
+    });
+  }
+}
+
+/**
+ * Show the crime data status text.
+ * @param {string} text
+ */
+export function showCrimeStatus(text) {
+  const el = document.getElementById('crime-status');
+  if (el) {
+    el.textContent = text;
+    el.hidden = false;
+  }
+}
+
+/**
+ * Hide the crime data status text.
+ */
+export function hideCrimeStatus() {
+  const el = document.getElementById('crime-status');
+  if (el) el.hidden = true;
+}
+
+/**
+ * Show the crime legend with density levels.
+ * @param {Object} colorMap - Maps density names to {fillColor, label}.
+ */
+export function showCrimeLegend(colorMap) {
+  const container = document.getElementById('crime-legend-items');
+  if (!container) return;
+
+  container.innerHTML = '';
+  ['low', 'medium', 'high', 'very-high'].forEach((level) => {
+    const config = colorMap[level];
+    if (!config) return;
+    const item = document.createElement('div');
+    item.className = 'legend-item';
+    item.innerHTML = `
+      <span class="legend-color" style="background: ${config.fillColor}"></span>
+      <span>${config.label}</span>
+    `;
+    container.appendChild(item);
+  });
+
+  const legend = document.getElementById('crime-legend');
+  if (legend) legend.hidden = false;
+}
+
+/**
+ * Hide the crime legend.
+ */
+export function hideCrimeLegend() {
+  const legend = document.getElementById('crime-legend');
+  if (legend) legend.hidden = true;
 }

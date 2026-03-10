@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { TIME_COLORS, TRANSPORT_MODES, DEFAULT_CENTER, DEFAULT_ZOOM, GEOAPIFY_ISOLINE_URL } from '../src/config.js';
+import { TIME_COLORS, TRANSPORT_MODES, DEFAULT_CENTER, DEFAULT_ZOOM, GEOAPIFY_ISOLINE_URL, POLICE_API_URL, ENV_GEOAPIFY_API_KEY } from '../src/config.js';
 
 describe('config', () => {
   describe('TIME_COLORS', () => {
@@ -70,6 +70,18 @@ describe('config', () => {
     it('is a reasonable zoom level', () => {
       expect(DEFAULT_ZOOM).toBeGreaterThanOrEqual(1);
       expect(DEFAULT_ZOOM).toBeLessThanOrEqual(20);
+    });
+  });
+
+  describe('POLICE_API_URL', () => {
+    it('points to UK police data API', () => {
+      expect(POLICE_API_URL).toContain('data.police.uk');
+    });
+  });
+
+  describe('ENV_GEOAPIFY_API_KEY', () => {
+    it('is a string (empty when no env var set)', () => {
+      expect(typeof ENV_GEOAPIFY_API_KEY).toBe('string');
     });
   });
 });

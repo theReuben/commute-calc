@@ -17,6 +17,17 @@ vi.mock('leaflet', () => {
     addTo: vi.fn().mockReturnThis(),
   };
 
+  const mockCrimeLayerGroup = {
+    clearLayers: vi.fn(),
+    addTo: vi.fn().mockReturnThis(),
+  };
+
+  const mockCircleMarker = {
+    addTo: vi.fn().mockReturnThis(),
+    bindPopup: vi.fn().mockReturnThis(),
+    bindTooltip: vi.fn().mockReturnThis(),
+  };
+
   return {
     default: {
       map: vi.fn().mockReturnValue({
@@ -27,10 +38,15 @@ vi.mock('leaflet', () => {
       }),
       tileLayer: vi.fn().mockReturnValue({ addTo: vi.fn() }),
       marker: vi.fn().mockReturnValue(mockMarker),
-      layerGroup: vi.fn().mockReturnValue(mockLayerGroup),
+      layerGroup: vi.fn()
+        .mockReturnValueOnce(mockLayerGroup)
+        .mockReturnValueOnce(mockCrimeLayerGroup),
       geoJSON: vi.fn().mockReturnValue({ addTo: vi.fn() }),
+      circleMarker: vi.fn().mockReturnValue(mockCircleMarker),
       _mockMarker: mockMarker,
       _mockLayerGroup: mockLayerGroup,
+      _mockCrimeLayerGroup: mockCrimeLayerGroup,
+      _mockCircleMarker: mockCircleMarker,
     },
   };
 });
@@ -42,11 +58,15 @@ describe('map', () => {
   let mapInstance;
   let mockMarker;
   let mockLayerGroup;
+  let mockCrimeLayerGroup;
+  let mockCircleMarker;
 
   beforeEach(() => {
     // Access the shared mock objects
     mockMarker = L._mockMarker;
     mockLayerGroup = L._mockLayerGroup;
+    mockCrimeLayerGroup = L._mockCrimeLayerGroup;
+    mockCircleMarker = L._mockCircleMarker;
 
     // Reset mock state
     vi.clearAllMocks();
@@ -55,6 +75,15 @@ describe('map', () => {
     mockMarker.getLatLng.mockReturnValue({ lat: 51.5, lng: -0.1 });
 
     mockLayerGroup.addTo.mockReturnValue(mockLayerGroup);
+    mockCrimeLayerGroup.addTo.mockReturnValue(mockCrimeLayerGroup);
+    mockCircleMarker.addTo.mockReturnValue(mockCircleMarker);
+    mockCircleMarker.bindPopup.mockReturnValue(mockCircleMarker);
+    mockCircleMarker.bindTooltip.mockReturnValue(mockCircleMarker);
+
+    // layerGroup is called twice: once for isochrones, once for crime
+    L.layerGroup
+      .mockReturnValueOnce(mockLayerGroup)
+      .mockReturnValueOnce(mockCrimeLayerGroup);
 
     document.body.innerHTML = '<div id="map"></div>';
     mapInstance = createMap('map');
@@ -155,6 +184,96 @@ describe('map', () => {
       };
       mapInstance.showIsochrones(geojson);
       expect(mockLayerGroup.clearLayers).toHaveBeenCalled();
+    });
+  });
+
+  describe('showCrimeOverlay', () => {
+    it('creates circle markers for each grid cell', () => {
+      const gridCells = [
+        { lat: 51.5, lon: -0.1, count: 5, density: 'low', categories: { burglary: 3, theft: 2 } },
+        { lat: 51.6, lon: -0.2, count: 15, density: 'high', categories: { 'violent-crime': 15 } },
+      ];
+      const colorMap = {
+        low: { fillColor: '#2b8a3e', color: '#1b5e20' },
+        high: { fillColor: '#e03131', color: '#c92a2a' },
+      };
+      mapInstance.showCrimeOverlay(gridCells, colorMap);
+      expect(L.circleMarker).toHaveBeenCalledTimes(2);
+      expect(mockCircleMarker.bindPopup).toHaveBeenCalledTimes(2);
+      expect(mockCircleMarker.bindTooltip).toHaveBeenCalledTimes(2);
+    });
+
+    it('clears existing crime markers before adding new ones', () => {
+      mapInstance.showCrimeOverlay([], {});
+      expect(mockCrimeLayerGroup.clearLayers).toHaveBeenCalled();
+    });
+
+    it('includes crime count in popup', () => {
+      const gridCells = [
+        { lat: 51.5, lon: -0.1, count: 5, density: 'low', categories: { burglary: 5 } },
+      ];
+      mapInstance.showCrimeOverlay(gridCells, { low: { fillColor: '#2b8a3e', color: '#1b5e20' } });
+      const popupHtml = mockCircleMarker.bindPopup.mock.calls[0][0];
+      expect(popupHtml).toContain('5 crimes');
+    });
+
+    it('shows all categories in popup on click', () => {
+      const gridCells = [
+        { lat: 51.5, lon: -0.1, count: 10, density: 'low', categories: { burglary: 4, theft: 3, 'anti-social-behaviour': 2, 'vehicle-crime': 1 } },
+      ];
+      mapInstance.showCrimeOverlay(gridCells, { low: { fillColor: '#2b8a3e', color: '#1b5e20' } });
+      const popupHtml = mockCircleMarker.bindPopup.mock.calls[0][0];
+      expect(popupHtml).toContain('Burglary: 4');
+      expect(popupHtml).toContain('Theft: 3');
+      expect(popupHtml).toContain('Anti Social Behaviour: 2');
+      expect(popupHtml).toContain('Vehicle Crime: 1');
+    });
+
+    it('shows hover tooltip with crime count and top category', () => {
+      const gridCells = [
+        { lat: 51.5, lon: -0.1, count: 8, density: 'medium', categories: { burglary: 5, theft: 3 } },
+      ];
+      mapInstance.showCrimeOverlay(gridCells, { medium: { fillColor: '#f59f00', color: '#e67700' } });
+      const tooltipText = mockCircleMarker.bindTooltip.mock.calls[0][0];
+      expect(tooltipText).toContain('8 crimes');
+      expect(tooltipText).toContain('Burglary');
+    });
+
+    it('binds tooltip with correct options', () => {
+      const gridCells = [
+        { lat: 51.5, lon: -0.1, count: 1, density: 'low', categories: { theft: 1 } },
+      ];
+      mapInstance.showCrimeOverlay(gridCells, { low: { fillColor: '#2b8a3e', color: '#1b5e20' } });
+      const tooltipOpts = mockCircleMarker.bindTooltip.mock.calls[0][1];
+      expect(tooltipOpts.direction).toBe('top');
+    });
+
+    it('escapes HTML in category names to prevent XSS', () => {
+      const gridCells = [
+        { lat: 51.5, lon: -0.1, count: 1, density: 'low', categories: { '<script>xss</script>': 1 } },
+      ];
+      mapInstance.showCrimeOverlay(gridCells, { low: { fillColor: '#2b8a3e', color: '#1b5e20' } });
+      const popupHtml = mockCircleMarker.bindPopup.mock.calls[0][0];
+      expect(popupHtml).not.toContain('<script>');
+      const tooltipText = mockCircleMarker.bindTooltip.mock.calls[0][0];
+      expect(tooltipText).not.toContain('<script>');
+    });
+
+    it('uses singular "crime" for count of 1 in tooltip', () => {
+      const gridCells = [
+        { lat: 51.5, lon: -0.1, count: 1, density: 'low', categories: { theft: 1 } },
+      ];
+      mapInstance.showCrimeOverlay(gridCells, { low: { fillColor: '#2b8a3e', color: '#1b5e20' } });
+      const tooltipText = mockCircleMarker.bindTooltip.mock.calls[0][0];
+      expect(tooltipText).toContain('1 crime');
+      expect(tooltipText).not.toContain('1 crimes');
+    });
+  });
+
+  describe('clearCrimeOverlay', () => {
+    it('clears the crime layer', () => {
+      mapInstance.clearCrimeOverlay();
+      expect(mockCrimeLayerGroup.clearLayers).toHaveBeenCalled();
     });
   });
 });
