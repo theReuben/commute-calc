@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { TIME_COLORS, TRANSPORT_MODES, DEFAULT_CENTER, DEFAULT_ZOOM } from '../src/config.js';
+import { TIME_COLORS, TRANSPORT_MODES, DEFAULT_CENTER, DEFAULT_ZOOM, GEOAPIFY_ISOLINE_URL } from '../src/config.js';
 
 describe('config', () => {
   describe('TIME_COLORS', () => {
@@ -25,20 +25,16 @@ describe('config', () => {
 
   describe('TRANSPORT_MODES', () => {
     it('has entries for car, public transport, cycling, and walking', () => {
-      expect(TRANSPORT_MODES).toHaveProperty('driving-car');
-      expect(TRANSPORT_MODES).toHaveProperty('public-transport');
-      expect(TRANSPORT_MODES).toHaveProperty('cycling-regular');
-      expect(TRANSPORT_MODES).toHaveProperty('foot-walking');
+      expect(TRANSPORT_MODES).toHaveProperty('drive');
+      expect(TRANSPORT_MODES).toHaveProperty('transit');
+      expect(TRANSPORT_MODES).toHaveProperty('bicycle');
+      expect(TRANSPORT_MODES).toHaveProperty('walk');
     });
 
-    it('marks public-transport as unsupported', () => {
-      expect(TRANSPORT_MODES['public-transport'].unsupported).toBe(true);
-    });
-
-    it('does not mark other modes as unsupported', () => {
-      expect(TRANSPORT_MODES['driving-car'].unsupported).toBeUndefined();
-      expect(TRANSPORT_MODES['cycling-regular'].unsupported).toBeUndefined();
-      expect(TRANSPORT_MODES['foot-walking'].unsupported).toBeUndefined();
+    it('all modes are supported (no unsupported flag)', () => {
+      Object.values(TRANSPORT_MODES).forEach((mode) => {
+        expect(mode.unsupported).toBeUndefined();
+      });
     });
 
     it('each mode has label and emoji', () => {
@@ -46,6 +42,17 @@ describe('config', () => {
         expect(mode).toHaveProperty('label');
         expect(mode).toHaveProperty('emoji');
       });
+    });
+
+    it('includes public transport with transit mode', () => {
+      expect(TRANSPORT_MODES['transit'].label).toBe('Public Transport');
+    });
+  });
+
+  describe('GEOAPIFY_ISOLINE_URL', () => {
+    it('points to Geoapify isoline API', () => {
+      expect(GEOAPIFY_ISOLINE_URL).toContain('geoapify.com');
+      expect(GEOAPIFY_ISOLINE_URL).toContain('isoline');
     });
   });
 

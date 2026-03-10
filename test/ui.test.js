@@ -17,8 +17,8 @@ function setupDOM() {
       <div id="legend-items"></div>
     </div>
     <div class="transport-modes" id="transport-mode">
-      <button class="mode-btn active" data-mode="driving-car">Car</button>
-      <button class="mode-btn" data-mode="cycling-regular">Cycle</button>
+      <button class="mode-btn active" data-mode="drive">Car</button>
+      <button class="mode-btn" data-mode="bicycle">Cycle</button>
     </div>
     <div id="time-intervals">
       <label><input type="checkbox" value="10" checked /> 10 min</label>
@@ -76,12 +76,12 @@ describe('ui', () => {
 
   describe('getSelectedMode', () => {
     it('returns the active mode', () => {
-      expect(getSelectedMode()).toBe('driving-car');
+      expect(getSelectedMode()).toBe('drive');
     });
 
-    it('returns driving-car as default when no active button', () => {
+    it('returns drive as default when no active button', () => {
       document.querySelectorAll('.mode-btn').forEach((b) => b.classList.remove('active'));
-      expect(getSelectedMode()).toBe('driving-car');
+      expect(getSelectedMode()).toBe('drive');
     });
   });
 

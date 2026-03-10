@@ -12,12 +12,13 @@ export const TIME_COLORS = {
 
 /**
  * Transport mode configuration with display labels.
+ * Uses Geoapify profile names for the Isoline API.
  */
 export const TRANSPORT_MODES = {
-  'driving-car': { label: 'Car', emoji: '🚗' },
-  'public-transport': { label: 'Public Transport', emoji: '🚌', unsupported: true },
-  'cycling-regular': { label: 'Cycling', emoji: '🚲' },
-  'foot-walking': { label: 'Walking', emoji: '🚶' },
+  'drive': { label: 'Car', emoji: '🚗' },
+  'transit': { label: 'Public Transport', emoji: '🚌' },
+  'bicycle': { label: 'Cycling', emoji: '🚲' },
+  'walk': { label: 'Walking', emoji: '🚶' },
 };
 
 /** Default map center (London, UK) */
@@ -26,8 +27,8 @@ export const DEFAULT_CENTER = [51.505, -0.09];
 /** Default map zoom level */
 export const DEFAULT_ZOOM = 13;
 
-/** OpenRouteService isochrone API URL */
-export const ORS_ISOCHRONE_URL = 'https://api.openrouteservice.org/v2/isochrones';
+/** Geoapify Isoline API URL */
+export const GEOAPIFY_ISOLINE_URL = 'https://api.geoapify.com/v1/isoline';
 
 /** Nominatim geocoding API URL */
 export const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';

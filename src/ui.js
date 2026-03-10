@@ -61,7 +61,7 @@ export function updateLegend(intervals) {
  */
 export function getSelectedMode() {
   const active = document.querySelector('.mode-btn.active');
-  return active ? active.dataset.mode : 'driving-car';
+  return active ? active.dataset.mode : 'drive';
 }
 
 /**

@@ -16,7 +16,7 @@ Visualize commutable areas from your workplace on an interactive map. Enter your
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) (v18 or later)
-- An [OpenRouteService](https://openrouteservice.org/dev/#/signup) API key (free)
+- A [Geoapify](https://myprojects.geoapify.com/register) API key (free)
 
 ### Installation
 
@@ -51,12 +51,12 @@ npm test
 1. Enter your **work address** in the search box, or **click on the map** to place a marker
 2. Select a **transport mode** (car, public transit, cycling, or walking)
 3. Choose which **time intervals** to display (10, 20, 30, 45, 60 minutes)
-4. Enter your **OpenRouteService API key**
+4. Enter your **Geoapify API key**
 5. Click **Calculate Commute Areas** to see colored overlays on the map
 
 ## Technology
 
 - [Vite](https://vitejs.dev/) — Build tool
 - [Leaflet](https://leafletjs.com/) — Interactive maps
-- [OpenRouteService](https://openrouteservice.org/) — Isochrone API for commute calculations
+- [Geoapify](https://www.geoapify.com/) — Isoline API for commute calculations (supports public transport)
 - [OpenStreetMap](https://www.openstreetmap.org/) — Map tiles and geocoding

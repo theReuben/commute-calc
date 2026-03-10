@@ -33,10 +33,10 @@
       <div class="control-group">
         <span id="transport-mode-label" class="group-label">Transport Mode</span>
         <div class="transport-modes" id="transport-mode" role="group" aria-labelledby="transport-mode-label">
-          <button class="mode-btn active" data-mode="driving-car" title="Car">🚗 Car</button>
-          <button class="mode-btn" data-mode="public-transport" title="Public Transport">🚌 Public</button>
-          <button class="mode-btn" data-mode="cycling-regular" title="Cycling">🚲 Cycle</button>
-          <button class="mode-btn" data-mode="foot-walking" title="Walking">🚶 Walk</button>
+          <button class="mode-btn active" data-mode="drive" title="Car">🚗 Car</button>
+          <button class="mode-btn" data-mode="transit" title="Public Transport">🚌 Public</button>
+          <button class="mode-btn" data-mode="bicycle" title="Cycling">🚲 Cycle</button>
+          <button class="mode-btn" data-mode="walk" title="Walking">🚶 Walk</button>
         </div>
       </div>
 
@@ -62,16 +62,16 @@
       </div>
 
       <div class="control-group">
-        <label for="api-key">OpenRouteService API Key</label>
+        <label for="api-key">Geoapify API Key</label>
         <input
           type="password"
           id="api-key"
-          placeholder="Enter your ORS API key"
+          placeholder="Enter your Geoapify API key"
         />
         <p class="hint">
           Get a free key at
-          <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener noreferrer">
-            openrouteservice.org
+          <a href="https://myprojects.geoapify.com/register" target="_blank" rel="noopener noreferrer">
+            geoapify.com
           </a>
         </p>
       </div>

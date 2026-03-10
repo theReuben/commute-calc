@@ -1,13 +1,14 @@
-import { ORS_ISOCHRONE_URL } from './config.js';
+import { GEOAPIFY_ISOLINE_URL } from './config.js';
 
 /**
- * Fetch isochrone polygons from OpenRouteService.
+ * Fetch isochrone polygons from Geoapify Isoline API.
+ * Makes parallel requests for each time interval and combines results.
  *
  * @param {Object} params
- * @param {string} params.apiKey - ORS API key.
+ * @param {string} params.apiKey - Geoapify API key.
  * @param {number} params.lat - Latitude of the origin.
  * @param {number} params.lon - Longitude of the origin.
- * @param {string} params.profile - Transport profile (e.g., 'driving-car').
+ * @param {string} params.profile - Transport mode (e.g., 'drive', 'transit', 'bicycle', 'walk').
  * @param {number[]} params.intervals - Time intervals in minutes.
  * @returns {Promise<Object>} GeoJSON FeatureCollection with isochrone polygons.
  */
@@ -22,41 +23,52 @@ export async function fetchIsochrones({ apiKey, lat, lon, profile, intervals }) 
     throw new Error('At least one time interval is required');
   }
 
-  const rangeSeconds = intervals
-    .map((m) => m * 60)
-    .sort((a, b) => a - b);
+  const sortedIntervals = [...intervals].sort((a, b) => a - b);
 
-  const body = {
-    locations: [[lon, lat]],
-    range: rangeSeconds,
-    range_type: 'time',
-  };
+  const promises = sortedIntervals.map(async (minutes) => {
+    const seconds = minutes * 60;
+    const params = new URLSearchParams({
+      lat: lat.toString(),
+      lon: lon.toString(),
+      type: 'time',
+      mode: profile,
+      range: seconds.toString(),
+      apiKey,
+    });
 
-  const response = await fetch(`${ORS_ISOCHRONE_URL}/${profile}`, {
-    method: 'POST',
-    headers: {
-      'Authorization': apiKey,
-      'Content-Type': 'application/json; charset=utf-8',
-      'Accept': 'application/json, application/geo+json',
-    },
-    body: JSON.stringify(body),
+    const response = await fetch(`${GEOAPIFY_ISOLINE_URL}?${params}`);
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      let message = `Isochrone request failed: ${response.status}`;
+      try {
+        const parsed = JSON.parse(errorBody);
+        if (parsed.message) {
+          message = parsed.message;
+        }
+      } catch {
+        // use default message
+      }
+      throw new Error(message);
+    }
+
+    const data = await response.json();
+
+    // Normalize: ensure each feature has value in seconds for consistent handling
+    (data.features || []).forEach((f) => {
+      f.properties = f.properties || {};
+      f.properties.value = seconds;
+    });
+
+    return data.features || [];
   });
 
-  if (!response.ok) {
-    const errorBody = await response.text();
-    let message = `Isochrone request failed: ${response.status}`;
-    try {
-      const parsed = JSON.parse(errorBody);
-      if (parsed.error && parsed.error.message) {
-        message = parsed.error.message;
-      }
-    } catch {
-      // use default message
-    }
-    throw new Error(message);
-  }
+  const allFeatures = await Promise.all(promises);
 
-  return response.json();
+  return {
+    type: 'FeatureCollection',
+    features: allFeatures.flat(),
+  };
 }
 
 /**
