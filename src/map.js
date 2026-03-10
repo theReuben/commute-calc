@@ -158,15 +158,23 @@ export function createMap(elementId) {
         fillOpacity: 0.55,
       }).addTo(crimeLayer);
 
-      // Build popup content
-      const topCategories = Object.entries(cell.categories)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 3)
+      // Build category breakdown sorted by count
+      const sortedCategories = Object.entries(cell.categories)
+        .sort((a, b) => b[1] - a[1]);
+
+      // Tooltip on hover — compact summary with top crime type
+      const topCat = sortedCategories[0];
+      const tooltipText = topCat
+        ? `${cell.count} crime${cell.count !== 1 ? 's' : ''} — ${escapeHtml(formatCrimeCategory(topCat[0]))}`
+        : `${cell.count} crime${cell.count !== 1 ? 's' : ''}`;
+      marker.bindTooltip(tooltipText, { direction: 'top', offset: [0, -6] });
+
+      // Popup on click — full category breakdown
+      const allCategories = sortedCategories
         .map(([cat, n]) => `${escapeHtml(formatCrimeCategory(cat))}: ${n}`)
         .join('<br>');
-
       marker.bindPopup(
-        `<strong>${cell.count} crime${cell.count !== 1 ? 's' : ''}</strong><br>${topCategories}`
+        `<strong>${cell.count} crime${cell.count !== 1 ? 's' : ''}</strong><br>${allCategories}`
       );
     });
   }
