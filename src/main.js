@@ -1,8 +1,7 @@
 import { createMap } from './map.js';
 import { geocodeAddress } from './geocode.js';
 import { fetchIsochrones } from './isochrone.js';
-import { getPropertySearchLinks } from './properties.js';
-import { fetchPropertyMarkers } from './propertyData.js';
+import { fetchCrimeData, aggregateCrimes, classifyCrimeDensity, CRIME_COLORS } from './crimeData.js';
 import {
   showStatus,
   hideStatus,
@@ -14,14 +13,12 @@ import {
   setupModeButtons,
   showSearchResults,
   hideSearchResults,
-  showPropertyLinks,
-  hidePropertyLinks,
-  getSelectedListingType,
-  setupPropertyTypeToggle,
-  isPropertyOverlayEnabled,
-  setupPropertyOverlayToggle,
-  showPropertyMarkerStatus,
-  hidePropertyMarkerStatus,
+  isCrimeOverlayEnabled,
+  setupCrimeOverlayToggle,
+  showCrimeStatus,
+  hideCrimeStatus,
+  showCrimeLegend,
+  hideCrimeLegend,
 } from './ui.js';
 
 /**
@@ -86,7 +83,6 @@ export function initApp() {
 
   // Calculate button
   const calculateBtn = document.getElementById('calculate-btn');
-  let lastSearchLocation = '';
   let lastGeojson = null;
 
   calculateBtn.addEventListener('click', async () => {
@@ -126,19 +122,9 @@ export function initApp() {
       updateLegend(intervals);
       lastGeojson = geojson;
 
-      // Show property search links if a location name is available
-      lastSearchLocation = searchInput.value.trim();
-      if (lastSearchLocation) {
-        const listingType = getSelectedListingType();
-        const links = getPropertySearchLinks(lastSearchLocation, listingType);
-        showPropertyLinks(links);
-      } else {
-        hidePropertyLinks();
-      }
-
-      // Fetch and display property markers on the map
-      if (isPropertyOverlayEnabled()) {
-        await loadPropertyMarkers(apiKey, geojson);
+      // Fetch crime data overlay if enabled
+      if (isCrimeOverlayEnabled()) {
+        await loadCrimeOverlay(geojson);
       }
 
       showStatus('Commute areas calculated successfully!', 'success');
@@ -150,44 +136,42 @@ export function initApp() {
   });
 
   /**
-   * Load property markers onto the map from Geoapify Places API.
-   * @param {string} apiKey
+   * Load crime data and display the overlay on the map.
    * @param {Object} geojson - Isochrone GeoJSON FeatureCollection.
    */
-  async function loadPropertyMarkers(apiKey, geojson) {
+  async function loadCrimeOverlay(geojson) {
     try {
-      showPropertyMarkerStatus('Loading property data...');
-      const markers = await fetchPropertyMarkers({ apiKey, geojson });
-      mapInstance.showPropertyMarkers(markers);
-      if (markers.length > 0) {
-        showPropertyMarkerStatus(`${markers.length} estate agent${markers.length !== 1 ? 's' : ''} found in commute area`);
+      showCrimeStatus('Loading crime data...');
+      const crimes = await fetchCrimeData({ geojson });
+      const grid = aggregateCrimes(crimes);
+      const maxCount = grid.reduce((max, cell) => Math.max(max, cell.count), 0);
+
+      const gridWithDensity = grid.map((cell) => ({
+        ...cell,
+        density: classifyCrimeDensity(cell.count, maxCount),
+      }));
+
+      mapInstance.showCrimeOverlay(gridWithDensity, CRIME_COLORS);
+      showCrimeLegend(CRIME_COLORS);
+
+      if (crimes.length > 0) {
+        showCrimeStatus(`${crimes.length} crime${crimes.length !== 1 ? 's' : ''} reported in commute area`);
       } else {
-        showPropertyMarkerStatus('No estate agents found in this area');
+        showCrimeStatus('No recent crime data available for this area');
       }
     } catch (err) {
-      showPropertyMarkerStatus('Could not load property data');
+      showCrimeStatus(`Crime data: ${err.message}`);
     }
   }
 
-  // Property overlay toggle
-  setupPropertyOverlayToggle((enabled) => {
+  // Crime overlay toggle
+  setupCrimeOverlayToggle((enabled) => {
     if (enabled && lastGeojson) {
-      const apiKey = getApiKey();
-      if (apiKey) {
-        loadPropertyMarkers(apiKey, lastGeojson);
-      }
+      loadCrimeOverlay(lastGeojson);
     } else {
-      mapInstance.clearPropertyMarkers();
-      hidePropertyMarkerStatus();
-    }
-  });
-
-  // Property listing type toggle (buy/rent)
-  setupPropertyTypeToggle(() => {
-    if (lastSearchLocation) {
-      const listingType = getSelectedListingType();
-      const links = getPropertySearchLinks(lastSearchLocation, listingType);
-      showPropertyLinks(links);
+      mapInstance.clearCrimeOverlay();
+      hideCrimeStatus();
+      hideCrimeLegend();
     }
   });
 }

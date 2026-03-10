@@ -17,7 +17,7 @@ vi.mock('leaflet', () => {
     addTo: vi.fn().mockReturnThis(),
   };
 
-  const mockPropertyLayerGroup = {
+  const mockCrimeLayerGroup = {
     clearLayers: vi.fn(),
     addTo: vi.fn().mockReturnThis(),
   };
@@ -39,12 +39,12 @@ vi.mock('leaflet', () => {
       marker: vi.fn().mockReturnValue(mockMarker),
       layerGroup: vi.fn()
         .mockReturnValueOnce(mockLayerGroup)
-        .mockReturnValueOnce(mockPropertyLayerGroup),
+        .mockReturnValueOnce(mockCrimeLayerGroup),
       geoJSON: vi.fn().mockReturnValue({ addTo: vi.fn() }),
       circleMarker: vi.fn().mockReturnValue(mockCircleMarker),
       _mockMarker: mockMarker,
       _mockLayerGroup: mockLayerGroup,
-      _mockPropertyLayerGroup: mockPropertyLayerGroup,
+      _mockCrimeLayerGroup: mockCrimeLayerGroup,
       _mockCircleMarker: mockCircleMarker,
     },
   };
@@ -57,14 +57,14 @@ describe('map', () => {
   let mapInstance;
   let mockMarker;
   let mockLayerGroup;
-  let mockPropertyLayerGroup;
+  let mockCrimeLayerGroup;
   let mockCircleMarker;
 
   beforeEach(() => {
     // Access the shared mock objects
     mockMarker = L._mockMarker;
     mockLayerGroup = L._mockLayerGroup;
-    mockPropertyLayerGroup = L._mockPropertyLayerGroup;
+    mockCrimeLayerGroup = L._mockCrimeLayerGroup;
     mockCircleMarker = L._mockCircleMarker;
 
     // Reset mock state
@@ -74,14 +74,14 @@ describe('map', () => {
     mockMarker.getLatLng.mockReturnValue({ lat: 51.5, lng: -0.1 });
 
     mockLayerGroup.addTo.mockReturnValue(mockLayerGroup);
-    mockPropertyLayerGroup.addTo.mockReturnValue(mockPropertyLayerGroup);
+    mockCrimeLayerGroup.addTo.mockReturnValue(mockCrimeLayerGroup);
     mockCircleMarker.addTo.mockReturnValue(mockCircleMarker);
     mockCircleMarker.bindPopup.mockReturnValue(mockCircleMarker);
 
-    // layerGroup is called twice: once for isochrones, once for property
+    // layerGroup is called twice: once for isochrones, once for crime
     L.layerGroup
       .mockReturnValueOnce(mockLayerGroup)
-      .mockReturnValueOnce(mockPropertyLayerGroup);
+      .mockReturnValueOnce(mockCrimeLayerGroup);
 
     document.body.innerHTML = '<div id="map"></div>';
     mapInstance = createMap('map');
@@ -185,47 +185,49 @@ describe('map', () => {
     });
   });
 
-  describe('showPropertyMarkers', () => {
-    it('creates circle markers for each property', () => {
-      const markers = [
-        { name: 'Foxtons', lat: 51.5, lon: -0.1, address: '123 High St', website: '', phone: '', type: 'Estate Agent' },
-        { name: 'Savills', lat: 51.6, lon: -0.2, address: '456 Main Rd', website: 'https://savills.com', phone: '', type: 'Estate Agent' },
+  describe('showCrimeOverlay', () => {
+    it('creates circle markers for each grid cell', () => {
+      const gridCells = [
+        { lat: 51.5, lon: -0.1, count: 5, density: 'low', categories: { burglary: 3, theft: 2 } },
+        { lat: 51.6, lon: -0.2, count: 15, density: 'high', categories: { 'violent-crime': 15 } },
       ];
-      mapInstance.showPropertyMarkers(markers);
+      const colorMap = {
+        low: { fillColor: '#2b8a3e', color: '#1b5e20' },
+        high: { fillColor: '#e03131', color: '#c92a2a' },
+      };
+      mapInstance.showCrimeOverlay(gridCells, colorMap);
       expect(L.circleMarker).toHaveBeenCalledTimes(2);
       expect(mockCircleMarker.bindPopup).toHaveBeenCalledTimes(2);
     });
 
-    it('clears existing property markers before adding new ones', () => {
-      mapInstance.showPropertyMarkers([]);
-      expect(mockPropertyLayerGroup.clearLayers).toHaveBeenCalled();
+    it('clears existing crime markers before adding new ones', () => {
+      mapInstance.showCrimeOverlay([], {});
+      expect(mockCrimeLayerGroup.clearLayers).toHaveBeenCalled();
     });
 
-    it('includes website link in popup when available', () => {
-      const markers = [
-        { name: 'Test', lat: 51.5, lon: -0.1, address: '', website: 'https://test.com', phone: '', type: '' },
+    it('includes crime count in popup', () => {
+      const gridCells = [
+        { lat: 51.5, lon: -0.1, count: 5, density: 'low', categories: { burglary: 5 } },
       ];
-      mapInstance.showPropertyMarkers(markers);
+      mapInstance.showCrimeOverlay(gridCells, { low: { fillColor: '#2b8a3e', color: '#1b5e20' } });
       const popupHtml = mockCircleMarker.bindPopup.mock.calls[0][0];
-      expect(popupHtml).toContain('https://test.com');
-      expect(popupHtml).toContain('Visit website');
+      expect(popupHtml).toContain('5 crimes');
     });
 
-    it('escapes HTML in marker data to prevent XSS', () => {
-      const markers = [
-        { name: '<script>alert("xss")</script>', lat: 51.5, lon: -0.1, address: '', website: '', phone: '', type: '' },
+    it('escapes HTML in category names to prevent XSS', () => {
+      const gridCells = [
+        { lat: 51.5, lon: -0.1, count: 1, density: 'low', categories: { '<script>xss</script>': 1 } },
       ];
-      mapInstance.showPropertyMarkers(markers);
+      mapInstance.showCrimeOverlay(gridCells, { low: { fillColor: '#2b8a3e', color: '#1b5e20' } });
       const popupHtml = mockCircleMarker.bindPopup.mock.calls[0][0];
       expect(popupHtml).not.toContain('<script>');
-      expect(popupHtml).toContain('&lt;script&gt;');
     });
   });
 
-  describe('clearPropertyMarkers', () => {
-    it('clears the property layer', () => {
-      mapInstance.clearPropertyMarkers();
-      expect(mockPropertyLayerGroup.clearLayers).toHaveBeenCalled();
+  describe('clearCrimeOverlay', () => {
+    it('clears the crime layer', () => {
+      mapInstance.clearCrimeOverlay();
+      expect(mockCrimeLayerGroup.clearLayers).toHaveBeenCalled();
     });
   });
 });

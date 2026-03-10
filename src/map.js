@@ -16,7 +16,7 @@ export function createMap(elementId) {
 
   let workMarker = null;
   let isochroneLayer = L.layerGroup().addTo(map);
-  let propertyLayer = L.layerGroup().addTo(map);
+  let crimeLayer = L.layerGroup().addTo(map);
   let markerDragCallback = null;
 
   /**
@@ -137,45 +137,55 @@ export function createMap(elementId) {
   }
 
   /**
-   * Display property markers on the map.
-   * @param {Array<{name: string, lat: number, lon: number, address: string, website: string, phone: string, type: string}>} markers
+   * Display crime density markers on the map.
+   * @param {Array<{lat: number, lon: number, count: number, density: string, categories: Object}>} gridCells
+   * @param {Object} colorMap - Maps density levels to {fillColor, color}.
    */
-  function showPropertyMarkers(markers) {
-    clearPropertyMarkers();
+  function showCrimeOverlay(gridCells, colorMap) {
+    clearCrimeOverlay();
 
-    markers.forEach((marker) => {
-      const circleMarker = L.circleMarker([marker.lat, marker.lon], {
-        radius: 6,
-        fillColor: '#20c997',
-        color: '#087f5b',
-        weight: 2,
-        opacity: 0.9,
-        fillOpacity: 0.7,
-      }).addTo(propertyLayer);
+    gridCells.forEach((cell) => {
+      const colors = colorMap[cell.density] || { fillColor: '#adb5bd', color: '#495057' };
+      const radius = Math.min(4 + Math.log2(cell.count + 1) * 3, 16);
 
-      let popupHtml = `<strong>${escapeHtml(marker.name)}</strong>`;
-      if (marker.type) {
-        popupHtml += `<br><em>${escapeHtml(marker.type)}</em>`;
-      }
-      if (marker.address) {
-        popupHtml += `<br>${escapeHtml(marker.address)}`;
-      }
-      if (marker.phone) {
-        popupHtml += `<br>📞 ${escapeHtml(marker.phone)}`;
-      }
-      if (marker.website) {
-        popupHtml += `<br><a href="${escapeHtml(marker.website)}" target="_blank" rel="noopener noreferrer">Visit website</a>`;
-      }
+      const marker = L.circleMarker([cell.lat, cell.lon], {
+        radius,
+        fillColor: colors.fillColor,
+        color: colors.color,
+        weight: 1.5,
+        opacity: 0.8,
+        fillOpacity: 0.55,
+      }).addTo(crimeLayer);
 
-      circleMarker.bindPopup(popupHtml);
+      // Build popup content
+      const topCategories = Object.entries(cell.categories)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([cat, n]) => `${escapeHtml(formatCrimeCategory(cat))}: ${n}`)
+        .join('<br>');
+
+      marker.bindPopup(
+        `<strong>${cell.count} crime${cell.count !== 1 ? 's' : ''}</strong><br>${topCategories}`
+      );
     });
   }
 
   /**
-   * Remove all property markers from the map.
+   * Remove all crime overlay markers from the map.
    */
-  function clearPropertyMarkers() {
-    propertyLayer.clearLayers();
+  function clearCrimeOverlay() {
+    crimeLayer.clearLayers();
+  }
+
+  /**
+   * Format a crime category slug into a readable label.
+   * @param {string} category
+   * @returns {string}
+   */
+  function formatCrimeCategory(category) {
+    return category
+      .replace(/-/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
   return {
@@ -184,8 +194,8 @@ export function createMap(elementId) {
     getWorkLocation,
     showIsochrones,
     clearIsochrones,
-    showPropertyMarkers,
-    clearPropertyMarkers,
+    showCrimeOverlay,
+    clearCrimeOverlay,
     onMapClick,
     onMarkerDrag,
   };

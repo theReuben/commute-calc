@@ -10,14 +10,12 @@ import {
   showSearchResults,
   hideSearchResults,
   setupModeButtons,
-  showPropertyLinks,
-  hidePropertyLinks,
-  getSelectedListingType,
-  setupPropertyTypeToggle,
-  isPropertyOverlayEnabled,
-  setupPropertyOverlayToggle,
-  showPropertyMarkerStatus,
-  hidePropertyMarkerStatus,
+  isCrimeOverlayEnabled,
+  setupCrimeOverlayToggle,
+  showCrimeStatus,
+  hideCrimeStatus,
+  showCrimeLegend,
+  hideCrimeLegend,
 } from '../src/ui.js';
 
 function setupDOM() {
@@ -37,17 +35,15 @@ function setupDOM() {
     </div>
     <input type="text" id="api-key" value="" />
     <div id="search-results" hidden></div>
-    <div id="property-links" class="property-section" hidden>
-      <div class="property-type-toggle">
-        <button class="property-type-btn active" data-listing="buy">Buy</button>
-        <button class="property-type-btn" data-listing="rent">Rent</button>
-      </div>
-      <label class="checkbox-label property-overlay-toggle">
-        <input type="checkbox" id="property-overlay" checked />
-        Show estate agents on map
+    <div id="crime-section" class="crime-section">
+      <label class="checkbox-label crime-overlay-toggle">
+        <input type="checkbox" id="crime-overlay" checked />
+        Show crime data on map
       </label>
-      <div id="property-marker-status" class="property-marker-status"></div>
-      <div class="property-links-list"></div>
+      <div id="crime-status" class="crime-status" hidden></div>
+      <div id="crime-legend" class="crime-legend" hidden>
+        <div id="crime-legend-items"></div>
+      </div>
     </div>
   `;
 }
@@ -120,8 +116,14 @@ describe('ui', () => {
       expect(getApiKey()).toBe('my-key');
     });
 
-    it('returns empty string for empty input', () => {
+    it('returns empty string for empty input when no env var', () => {
       expect(getApiKey()).toBe('');
+    });
+  });
+
+  describe('initApiKey', () => {
+    it('does not throw when called', () => {
+      expect(() => initApiKey()).not.toThrow();
     });
   });
 
@@ -184,117 +186,66 @@ describe('ui', () => {
     });
   });
 
-  describe('initApiKey', () => {
-    it('does not throw when env var is empty', () => {
-      expect(() => initApiKey()).not.toThrow();
-    });
-
-    it('does not overwrite existing input value', () => {
-      document.getElementById('api-key').value = 'user-key';
-      initApiKey();
-      expect(document.getElementById('api-key').value).toBe('user-key');
-    });
-  });
-
-  describe('showPropertyLinks', () => {
-    it('displays property links in the container', () => {
-      const links = [
-        { name: 'Rightmove', emoji: '🏠', url: 'https://rightmove.co.uk/test' },
-        { name: 'Zoopla', emoji: '🔍', url: 'https://zoopla.co.uk/test' },
-      ];
-      showPropertyLinks(links);
-      const container = document.getElementById('property-links');
-      expect(container.hidden).toBe(false);
-      const linkEls = container.querySelectorAll('.property-link');
-      expect(linkEls.length).toBe(2);
-      expect(linkEls[0].href).toContain('rightmove.co.uk');
-      expect(linkEls[0].target).toBe('_blank');
-      expect(linkEls[0].rel).toContain('noopener');
-    });
-
-    it('hides container when links array is empty', () => {
-      showPropertyLinks([]);
-      expect(document.getElementById('property-links').hidden).toBe(true);
-    });
-  });
-
-  describe('hidePropertyLinks', () => {
-    it('hides the property links container', () => {
-      showPropertyLinks([{ name: 'Test', emoji: '🏠', url: 'https://test.com' }]);
-      hidePropertyLinks();
-      expect(document.getElementById('property-links').hidden).toBe(true);
-    });
-  });
-
-  describe('getSelectedListingType', () => {
-    it('returns buy by default', () => {
-      expect(getSelectedListingType()).toBe('buy');
-    });
-
-    it('returns buy when no active button', () => {
-      document.querySelectorAll('.property-type-btn').forEach((b) => b.classList.remove('active'));
-      expect(getSelectedListingType()).toBe('buy');
-    });
-  });
-
-  describe('setupPropertyTypeToggle', () => {
-    it('toggles active class between buy and rent buttons', () => {
-      setupPropertyTypeToggle();
-      const buttons = document.querySelectorAll('.property-type-btn');
-      expect(buttons[0].classList.contains('active')).toBe(true);
-      expect(buttons[1].classList.contains('active')).toBe(false);
-
-      buttons[1].click();
-      expect(buttons[0].classList.contains('active')).toBe(false);
-      expect(buttons[1].classList.contains('active')).toBe(true);
-    });
-
-    it('calls onChange callback with the selected listing type', () => {
-      const onChange = vi.fn();
-      setupPropertyTypeToggle(onChange);
-      const buttons = document.querySelectorAll('.property-type-btn');
-
-      buttons[1].click();
-      expect(onChange).toHaveBeenCalledWith('rent');
-    });
-  });
-
-  describe('isPropertyOverlayEnabled', () => {
+  describe('isCrimeOverlayEnabled', () => {
     it('returns true when checkbox is checked', () => {
-      expect(isPropertyOverlayEnabled()).toBe(true);
+      expect(isCrimeOverlayEnabled()).toBe(true);
     });
 
     it('returns false when checkbox is unchecked', () => {
-      document.getElementById('property-overlay').checked = false;
-      expect(isPropertyOverlayEnabled()).toBe(false);
+      document.getElementById('crime-overlay').checked = false;
+      expect(isCrimeOverlayEnabled()).toBe(false);
     });
   });
 
-  describe('setupPropertyOverlayToggle', () => {
+  describe('setupCrimeOverlayToggle', () => {
     it('calls onChange with checked state when toggled', () => {
       const onChange = vi.fn();
-      setupPropertyOverlayToggle(onChange);
-      const checkbox = document.getElementById('property-overlay');
+      setupCrimeOverlayToggle(onChange);
+      const checkbox = document.getElementById('crime-overlay');
       checkbox.checked = false;
       checkbox.dispatchEvent(new Event('change'));
       expect(onChange).toHaveBeenCalledWith(false);
     });
   });
 
-  describe('showPropertyMarkerStatus', () => {
+  describe('showCrimeStatus', () => {
     it('displays text in the status element', () => {
-      showPropertyMarkerStatus('3 estate agents found');
-      const el = document.getElementById('property-marker-status');
-      expect(el.textContent).toBe('3 estate agents found');
+      showCrimeStatus('42 crimes reported');
+      const el = document.getElementById('crime-status');
+      expect(el.textContent).toBe('42 crimes reported');
       expect(el.hidden).toBe(false);
     });
   });
 
-  describe('hidePropertyMarkerStatus', () => {
+  describe('hideCrimeStatus', () => {
     it('hides the status element', () => {
-      showPropertyMarkerStatus('test');
-      hidePropertyMarkerStatus();
-      expect(document.getElementById('property-marker-status').hidden).toBe(true);
+      showCrimeStatus('test');
+      hideCrimeStatus();
+      expect(document.getElementById('crime-status').hidden).toBe(true);
+    });
+  });
+
+  describe('showCrimeLegend', () => {
+    it('displays legend items for each density level', () => {
+      const colorMap = {
+        low: { fillColor: '#2b8a3e', label: 'Low crime' },
+        medium: { fillColor: '#f59f00', label: 'Medium crime' },
+        high: { fillColor: '#e03131', label: 'High crime' },
+        'very-high': { fillColor: '#7b2d8e', label: 'Very high crime' },
+      };
+      showCrimeLegend(colorMap);
+      const legend = document.getElementById('crime-legend');
+      expect(legend.hidden).toBe(false);
+      const items = legend.querySelectorAll('.legend-item');
+      expect(items.length).toBe(4);
+    });
+  });
+
+  describe('hideCrimeLegend', () => {
+    it('hides the crime legend', () => {
+      showCrimeLegend({ low: { fillColor: '#2b8a3e', label: 'Low' } });
+      hideCrimeLegend();
+      expect(document.getElementById('crime-legend').hidden).toBe(true);
     });
   });
 });

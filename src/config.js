@@ -30,11 +30,11 @@ export const DEFAULT_ZOOM = 13;
 /** Geoapify Isoline API URL */
 export const GEOAPIFY_ISOLINE_URL = 'https://api.geoapify.com/v1/isoline';
 
-/** Geoapify Places API URL */
-export const GEOAPIFY_PLACES_URL = 'https://api.geoapify.com/v2/places';
-
 /** Nominatim geocoding API URL */
 export const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
+
+/** UK Police API base URL (no API key required) */
+export const POLICE_API_URL = 'https://data.police.uk/api';
 
 /**
  * Geoapify API key from environment variable (set via VITE_GEOAPIFY_API_KEY).

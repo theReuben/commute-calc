@@ -235,91 +235,31 @@ body {
   border: 1px solid rgba(0, 0, 0, 0.15);
 }
 
-.property-section {
+.crime-section {
   padding: 12px;
   background: white;
   border: 1px solid #dee2e6;
   border-radius: 8px;
 }
 
-.property-section h3 {
+.crime-section h3 {
   font-size: 0.85rem;
   margin-bottom: 8px;
   color: #495057;
 }
 
-.property-type-toggle {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 8px;
-}
-
-.property-type-btn {
-  flex: 1;
-  padding: 6px;
-  border: 2px solid #dee2e6;
-  border-radius: 6px;
-  background: white;
-  cursor: pointer;
-  font-size: 0.8rem;
-  text-align: center;
-  transition: all 0.15s ease;
-}
-
-.property-type-btn:hover {
-  border-color: #74c0fc;
-  background: #e7f5ff;
-}
-
-.property-type-btn.active {
-  border-color: #228be6;
-  background: #e7f5ff;
-  font-weight: 600;
-}
-
-.property-links-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.crime-overlay-toggle {
   margin-bottom: 6px;
 }
 
-.property-link {
-  display: block;
-  padding: 8px 12px;
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
-  color: #228be6;
-  text-decoration: none;
-  font-size: 0.85rem;
-  transition: all 0.15s ease;
-}
-
-.property-link:hover {
-  background: #e7f5ff;
-  border-color: #74c0fc;
-}
-
-.property-overlay-toggle {
-  margin-bottom: 6px;
-  font-size: 0.85rem;
-}
-
-.property-marker-status {
+.crime-status {
   font-size: 0.75rem;
-  color: #087f5b;
+  color: #495057;
   padding: 4px 0;
 }
 
-.marker-dot {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #20c997;
-  border: 1.5px solid #087f5b;
-  vertical-align: middle;
+.crime-legend {
+  padding: 4px 0;
 }
 
 @media (max-width: 768px) {

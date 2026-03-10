@@ -92,19 +92,17 @@
         <div id="legend-items"></div>
       </div>
 
-      <div id="property-links" class="property-section" hidden>
-        <h3>Find Properties</h3>
-        <div class="property-type-toggle">
-          <button class="property-type-btn active" data-listing="buy">Buy</button>
-          <button class="property-type-btn" data-listing="rent">Rent</button>
-        </div>
-        <label class="checkbox-label property-overlay-toggle">
-          <input type="checkbox" id="property-overlay" checked />
-          Show estate agents on map
+      <div id="crime-section" class="crime-section">
+        <h3>🔍 Area Safety</h3>
+        <label class="checkbox-label crime-overlay-toggle">
+          <input type="checkbox" id="crime-overlay" checked />
+          Show crime data on map
         </label>
-        <div id="property-marker-status" class="property-marker-status"></div>
-        <div class="property-links-list"></div>
-        <p class="hint">Estate agents shown as <span class="marker-dot"></span> markers on the map. Search full listings on:</p>
+        <div id="crime-status" class="crime-status" hidden></div>
+        <div id="crime-legend" class="crime-legend" hidden>
+          <div id="crime-legend-items"></div>
+        </div>
+        <p class="hint">Crime data from <a href="https://data.police.uk" target="_blank" rel="noopener noreferrer">data.police.uk</a> (UK only, most recent month)</p>
       </div>
     </div>
 
