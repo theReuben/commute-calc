@@ -24,11 +24,21 @@ describe('config', () => {
   });
 
   describe('TRANSPORT_MODES', () => {
-    it('has entries for car, cycling, walking, and hiking', () => {
+    it('has entries for car, public transport, cycling, and walking', () => {
       expect(TRANSPORT_MODES).toHaveProperty('driving-car');
+      expect(TRANSPORT_MODES).toHaveProperty('public-transport');
       expect(TRANSPORT_MODES).toHaveProperty('cycling-regular');
       expect(TRANSPORT_MODES).toHaveProperty('foot-walking');
-      expect(TRANSPORT_MODES).toHaveProperty('foot-hiking');
+    });
+
+    it('marks public-transport as unsupported', () => {
+      expect(TRANSPORT_MODES['public-transport'].unsupported).toBe(true);
+    });
+
+    it('does not mark other modes as unsupported', () => {
+      expect(TRANSPORT_MODES['driving-car'].unsupported).toBeUndefined();
+      expect(TRANSPORT_MODES['cycling-regular'].unsupported).toBeUndefined();
+      expect(TRANSPORT_MODES['foot-walking'].unsupported).toBeUndefined();
     });
 
     it('each mode has label and emoji', () => {

@@ -1,6 +1,7 @@
 import { createMap } from './map.js';
 import { geocodeAddress } from './geocode.js';
 import { fetchIsochrones } from './isochrone.js';
+import { TRANSPORT_MODES } from './config.js';
 import {
   showStatus,
   hideStatus,
@@ -92,6 +93,14 @@ export function initApp() {
     }
 
     const profile = getSelectedMode();
+    const modeConfig = TRANSPORT_MODES[profile];
+    if (modeConfig && modeConfig.unsupported) {
+      showStatus(
+        `${modeConfig.label} is not yet supported by the OpenRouteService API. Please select a different transport mode.`,
+        'error'
+      );
+      return;
+    }
 
     calculateBtn.disabled = true;
     showStatus('Calculating commute areas...', 'info');

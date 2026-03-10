@@ -15,9 +15,9 @@ export const TIME_COLORS = {
  */
 export const TRANSPORT_MODES = {
   'driving-car': { label: 'Car', emoji: '🚗' },
+  'public-transport': { label: 'Public Transport', emoji: '🚌', unsupported: true },
   'cycling-regular': { label: 'Cycling', emoji: '🚲' },
   'foot-walking': { label: 'Walking', emoji: '🚶' },
-  'foot-hiking': { label: 'Hiking', emoji: '🥾' },
 };
 
 /** Default map center (London, UK) */
