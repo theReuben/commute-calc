@@ -1,6 +1,6 @@
 /**
  * Color configuration for commute time intervals.
- * Colors progress from green (short commute) to red (long commute).
+ * Colors progress from green (short commute) to purple (long commute).
  */
 export const TIME_COLORS = {
   10: { color: '#2b8a3e', fillColor: '#69db7c', label: '10 minutes' },
@@ -15,9 +15,9 @@ export const TIME_COLORS = {
  */
 export const TRANSPORT_MODES = {
   'driving-car': { label: 'Car', emoji: '🚗' },
-  'public-transport': { label: 'Public Transport', emoji: '🚌' },
   'cycling-regular': { label: 'Cycling', emoji: '🚲' },
   'foot-walking': { label: 'Walking', emoji: '🚶' },
+  'foot-hiking': { label: 'Hiking', emoji: '🥾' },
 };
 
 /** Default map center (London, UK) */

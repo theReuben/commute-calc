@@ -44,6 +44,9 @@ describe('geocode', () => {
     const url = fetch.mock.calls[0][0];
     expect(url).toContain('nominatim.openstreetmap.org');
     expect(url).toContain('q=London');
+
+    const options = fetch.mock.calls[0][1];
+    expect(options.headers['User-Agent']).toBe('commute-calc/1.0');
   });
 
   it('throws on HTTP error', async () => {

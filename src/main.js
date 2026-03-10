@@ -22,6 +22,11 @@ export function initApp() {
   // Set up transport mode switching
   setupModeButtons();
 
+  // Handle marker drag to update work location
+  mapInstance.onMarkerDrag((lat, lon) => {
+    mapInstance.setWorkLocation(lat, lon);
+  });
+
   // Map click to set work location
   mapInstance.onMapClick((lat, lon) => {
     mapInstance.setWorkLocation(lat, lon);
@@ -60,7 +65,7 @@ export function initApp() {
   // Close search results when clicking outside
   document.addEventListener('click', (e) => {
     const resultsEl = document.getElementById('search-results');
-    if (resultsEl && !resultsEl.contains(e.target) && e.target !== searchInput) {
+    if (resultsEl && !resultsEl.contains(e.target) && e.target !== searchInput && e.target !== searchBtn) {
       hideSearchResults();
     }
   });

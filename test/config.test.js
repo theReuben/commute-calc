@@ -24,11 +24,11 @@ describe('config', () => {
   });
 
   describe('TRANSPORT_MODES', () => {
-    it('has entries for car, public, cycling, and walking', () => {
+    it('has entries for car, cycling, walking, and hiking', () => {
       expect(TRANSPORT_MODES).toHaveProperty('driving-car');
-      expect(TRANSPORT_MODES).toHaveProperty('public-transport');
       expect(TRANSPORT_MODES).toHaveProperty('cycling-regular');
       expect(TRANSPORT_MODES).toHaveProperty('foot-walking');
+      expect(TRANSPORT_MODES).toHaveProperty('foot-hiking');
     });
 
     it('each mode has label and emoji', () => {

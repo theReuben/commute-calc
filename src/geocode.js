@@ -19,6 +19,7 @@ export async function geocodeAddress(query) {
   const response = await fetch(`${NOMINATIM_URL}?${params}`, {
     headers: {
       'Accept': 'application/json',
+      'User-Agent': 'commute-calc/1.0',
     },
   });
 

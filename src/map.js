@@ -16,6 +16,18 @@ export function createMap(elementId) {
 
   let workMarker = null;
   let isochroneLayer = L.layerGroup().addTo(map);
+  let markerDragCallback = null;
+
+  /**
+   * Escape HTML special characters to prevent XSS.
+   * @param {string} str
+   * @returns {string}
+   */
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
 
   /**
    * Set or move the work location marker.
@@ -31,9 +43,19 @@ export function createMap(elementId) {
         draggable: true,
         title: 'Work Location',
       }).addTo(map);
+
+      // Register dragend listener when marker is first created
+      workMarker.on('dragend', () => {
+        const pos = workMarker.getLatLng();
+        if (markerDragCallback) {
+          markerDragCallback(pos.lat, pos.lng);
+        }
+      });
     }
 
-    const popupText = label || `Work Location<br>${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+    const popupText = label
+      ? escapeHtml(label)
+      : `Work Location<br>${lat.toFixed(5)}, ${lon.toFixed(5)}`;
     workMarker.bindPopup(popupText).openPopup();
     map.setView([lat, lon], Math.max(map.getZoom(), 12));
 
@@ -106,15 +128,11 @@ export function createMap(elementId) {
 
   /**
    * Register a callback for when the work marker is dragged.
+   * The callback is stored and automatically attached when the marker is created.
    * @param {function} callback - Called with (lat, lon) after drag.
    */
   function onMarkerDrag(callback) {
-    if (workMarker) {
-      workMarker.on('dragend', () => {
-        const pos = workMarker.getLatLng();
-        callback(pos.lat, pos.lng);
-      });
-    }
+    markerDragCallback = callback;
   }
 
   return {
