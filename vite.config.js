@@ -1,7 +1,10 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+const base = process.env.GITHUB_PAGES === 'true' ? '/commute-calc/' : '/';
+
 export default defineConfig({
+  base,
   root: '.',
   build: {
     outDir: 'dist',
@@ -17,8 +20,8 @@ export default defineConfig({
         theme_color: '#2563eb',
         background_color: '#ffffff',
         display: 'standalone',
-        scope: '/',
-        start_url: '/',
+        scope: base,
+        start_url: base,
         icons: [
           {
             src: 'pwa-192x192.png',
