@@ -116,7 +116,7 @@ describe('ui', () => {
       expect(getApiKey()).toBe('my-key');
     });
 
-    it('returns empty string for empty input when no env var', () => {
+    it('returns empty string when input field is empty', () => {
       expect(getApiKey()).toBe('');
     });
   });

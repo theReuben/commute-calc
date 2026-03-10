@@ -146,6 +146,7 @@ export function createMap(elementId) {
 
     gridCells.forEach((cell) => {
       const colors = colorMap[cell.density] || { fillColor: '#adb5bd', color: '#495057' };
+      // Radius: base 4px, log-scaled by count (factor 3), capped at 16px
       const radius = Math.min(4 + Math.log2(cell.count + 1) * 3, 16);
 
       const marker = L.circleMarker([cell.lat, cell.lon], {
