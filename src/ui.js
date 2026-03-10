@@ -207,3 +207,45 @@ export function setupPropertyTypeToggle(onChange) {
     });
   });
 }
+
+/**
+ * Check if the property overlay checkbox is enabled.
+ * @returns {boolean}
+ */
+export function isPropertyOverlayEnabled() {
+  const el = document.getElementById('property-overlay');
+  return el ? el.checked : false;
+}
+
+/**
+ * Set up property overlay toggle change handler.
+ * @param {function} onChange - Callback with (enabled: boolean).
+ */
+export function setupPropertyOverlayToggle(onChange) {
+  const el = document.getElementById('property-overlay');
+  if (el) {
+    el.addEventListener('change', () => {
+      if (onChange) onChange(el.checked);
+    });
+  }
+}
+
+/**
+ * Show the property marker count/status.
+ * @param {string} text
+ */
+export function showPropertyMarkerStatus(text) {
+  const el = document.getElementById('property-marker-status');
+  if (el) {
+    el.textContent = text;
+    el.hidden = false;
+  }
+}
+
+/**
+ * Hide the property marker status.
+ */
+export function hidePropertyMarkerStatus() {
+  const el = document.getElementById('property-marker-status');
+  if (el) el.hidden = true;
+}

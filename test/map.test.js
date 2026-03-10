@@ -17,6 +17,16 @@ vi.mock('leaflet', () => {
     addTo: vi.fn().mockReturnThis(),
   };
 
+  const mockPropertyLayerGroup = {
+    clearLayers: vi.fn(),
+    addTo: vi.fn().mockReturnThis(),
+  };
+
+  const mockCircleMarker = {
+    addTo: vi.fn().mockReturnThis(),
+    bindPopup: vi.fn().mockReturnThis(),
+  };
+
   return {
     default: {
       map: vi.fn().mockReturnValue({
@@ -27,10 +37,15 @@ vi.mock('leaflet', () => {
       }),
       tileLayer: vi.fn().mockReturnValue({ addTo: vi.fn() }),
       marker: vi.fn().mockReturnValue(mockMarker),
-      layerGroup: vi.fn().mockReturnValue(mockLayerGroup),
+      layerGroup: vi.fn()
+        .mockReturnValueOnce(mockLayerGroup)
+        .mockReturnValueOnce(mockPropertyLayerGroup),
       geoJSON: vi.fn().mockReturnValue({ addTo: vi.fn() }),
+      circleMarker: vi.fn().mockReturnValue(mockCircleMarker),
       _mockMarker: mockMarker,
       _mockLayerGroup: mockLayerGroup,
+      _mockPropertyLayerGroup: mockPropertyLayerGroup,
+      _mockCircleMarker: mockCircleMarker,
     },
   };
 });
@@ -42,11 +57,15 @@ describe('map', () => {
   let mapInstance;
   let mockMarker;
   let mockLayerGroup;
+  let mockPropertyLayerGroup;
+  let mockCircleMarker;
 
   beforeEach(() => {
     // Access the shared mock objects
     mockMarker = L._mockMarker;
     mockLayerGroup = L._mockLayerGroup;
+    mockPropertyLayerGroup = L._mockPropertyLayerGroup;
+    mockCircleMarker = L._mockCircleMarker;
 
     // Reset mock state
     vi.clearAllMocks();
@@ -55,6 +74,14 @@ describe('map', () => {
     mockMarker.getLatLng.mockReturnValue({ lat: 51.5, lng: -0.1 });
 
     mockLayerGroup.addTo.mockReturnValue(mockLayerGroup);
+    mockPropertyLayerGroup.addTo.mockReturnValue(mockPropertyLayerGroup);
+    mockCircleMarker.addTo.mockReturnValue(mockCircleMarker);
+    mockCircleMarker.bindPopup.mockReturnValue(mockCircleMarker);
+
+    // layerGroup is called twice: once for isochrones, once for property
+    L.layerGroup
+      .mockReturnValueOnce(mockLayerGroup)
+      .mockReturnValueOnce(mockPropertyLayerGroup);
 
     document.body.innerHTML = '<div id="map"></div>';
     mapInstance = createMap('map');
@@ -155,6 +182,50 @@ describe('map', () => {
       };
       mapInstance.showIsochrones(geojson);
       expect(mockLayerGroup.clearLayers).toHaveBeenCalled();
+    });
+  });
+
+  describe('showPropertyMarkers', () => {
+    it('creates circle markers for each property', () => {
+      const markers = [
+        { name: 'Foxtons', lat: 51.5, lon: -0.1, address: '123 High St', website: '', phone: '', type: 'Estate Agent' },
+        { name: 'Savills', lat: 51.6, lon: -0.2, address: '456 Main Rd', website: 'https://savills.com', phone: '', type: 'Estate Agent' },
+      ];
+      mapInstance.showPropertyMarkers(markers);
+      expect(L.circleMarker).toHaveBeenCalledTimes(2);
+      expect(mockCircleMarker.bindPopup).toHaveBeenCalledTimes(2);
+    });
+
+    it('clears existing property markers before adding new ones', () => {
+      mapInstance.showPropertyMarkers([]);
+      expect(mockPropertyLayerGroup.clearLayers).toHaveBeenCalled();
+    });
+
+    it('includes website link in popup when available', () => {
+      const markers = [
+        { name: 'Test', lat: 51.5, lon: -0.1, address: '', website: 'https://test.com', phone: '', type: '' },
+      ];
+      mapInstance.showPropertyMarkers(markers);
+      const popupHtml = mockCircleMarker.bindPopup.mock.calls[0][0];
+      expect(popupHtml).toContain('https://test.com');
+      expect(popupHtml).toContain('Visit website');
+    });
+
+    it('escapes HTML in marker data to prevent XSS', () => {
+      const markers = [
+        { name: '<script>alert("xss")</script>', lat: 51.5, lon: -0.1, address: '', website: '', phone: '', type: '' },
+      ];
+      mapInstance.showPropertyMarkers(markers);
+      const popupHtml = mockCircleMarker.bindPopup.mock.calls[0][0];
+      expect(popupHtml).not.toContain('<script>');
+      expect(popupHtml).toContain('&lt;script&gt;');
+    });
+  });
+
+  describe('clearPropertyMarkers', () => {
+    it('clears the property layer', () => {
+      mapInstance.clearPropertyMarkers();
+      expect(mockPropertyLayerGroup.clearLayers).toHaveBeenCalled();
     });
   });
 });

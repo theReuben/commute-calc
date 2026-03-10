@@ -16,6 +16,7 @@ export function createMap(elementId) {
 
   let workMarker = null;
   let isochroneLayer = L.layerGroup().addTo(map);
+  let propertyLayer = L.layerGroup().addTo(map);
   let markerDragCallback = null;
 
   /**
@@ -135,12 +136,56 @@ export function createMap(elementId) {
     markerDragCallback = callback;
   }
 
+  /**
+   * Display property markers on the map.
+   * @param {Array<{name: string, lat: number, lon: number, address: string, website: string, phone: string, type: string}>} markers
+   */
+  function showPropertyMarkers(markers) {
+    clearPropertyMarkers();
+
+    markers.forEach((marker) => {
+      const circleMarker = L.circleMarker([marker.lat, marker.lon], {
+        radius: 6,
+        fillColor: '#20c997',
+        color: '#087f5b',
+        weight: 2,
+        opacity: 0.9,
+        fillOpacity: 0.7,
+      }).addTo(propertyLayer);
+
+      let popupHtml = `<strong>${escapeHtml(marker.name)}</strong>`;
+      if (marker.type) {
+        popupHtml += `<br><em>${escapeHtml(marker.type)}</em>`;
+      }
+      if (marker.address) {
+        popupHtml += `<br>${escapeHtml(marker.address)}`;
+      }
+      if (marker.phone) {
+        popupHtml += `<br>📞 ${escapeHtml(marker.phone)}`;
+      }
+      if (marker.website) {
+        popupHtml += `<br><a href="${escapeHtml(marker.website)}" target="_blank" rel="noopener noreferrer">Visit website</a>`;
+      }
+
+      circleMarker.bindPopup(popupHtml);
+    });
+  }
+
+  /**
+   * Remove all property markers from the map.
+   */
+  function clearPropertyMarkers() {
+    propertyLayer.clearLayers();
+  }
+
   return {
     map,
     setWorkLocation,
     getWorkLocation,
     showIsochrones,
     clearIsochrones,
+    showPropertyMarkers,
+    clearPropertyMarkers,
     onMapClick,
     onMarkerDrag,
   };

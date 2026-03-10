@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { TIME_COLORS, TRANSPORT_MODES, DEFAULT_CENTER, DEFAULT_ZOOM, GEOAPIFY_ISOLINE_URL, ENV_GEOAPIFY_API_KEY } from '../src/config.js';
+import { TIME_COLORS, TRANSPORT_MODES, DEFAULT_CENTER, DEFAULT_ZOOM, GEOAPIFY_ISOLINE_URL, GEOAPIFY_PLACES_URL, ENV_GEOAPIFY_API_KEY } from '../src/config.js';
 
 describe('config', () => {
   describe('TIME_COLORS', () => {
@@ -53,6 +53,13 @@ describe('config', () => {
     it('points to Geoapify isoline API', () => {
       expect(GEOAPIFY_ISOLINE_URL).toContain('geoapify.com');
       expect(GEOAPIFY_ISOLINE_URL).toContain('isoline');
+    });
+  });
+
+  describe('GEOAPIFY_PLACES_URL', () => {
+    it('points to Geoapify places API', () => {
+      expect(GEOAPIFY_PLACES_URL).toContain('geoapify.com');
+      expect(GEOAPIFY_PLACES_URL).toContain('places');
     });
   });
 

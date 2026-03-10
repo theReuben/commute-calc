@@ -301,6 +301,27 @@ body {
   border-color: #74c0fc;
 }
 
+.property-overlay-toggle {
+  margin-bottom: 6px;
+  font-size: 0.85rem;
+}
+
+.property-marker-status {
+  font-size: 0.75rem;
+  color: #087f5b;
+  padding: 4px 0;
+}
+
+.marker-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #20c997;
+  border: 1.5px solid #087f5b;
+  vertical-align: middle;
+}
+
 @media (max-width: 768px) {
   #app {
     flex-direction: column;

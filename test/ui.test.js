@@ -14,6 +14,10 @@ import {
   hidePropertyLinks,
   getSelectedListingType,
   setupPropertyTypeToggle,
+  isPropertyOverlayEnabled,
+  setupPropertyOverlayToggle,
+  showPropertyMarkerStatus,
+  hidePropertyMarkerStatus,
 } from '../src/ui.js';
 
 function setupDOM() {
@@ -38,6 +42,11 @@ function setupDOM() {
         <button class="property-type-btn active" data-listing="buy">Buy</button>
         <button class="property-type-btn" data-listing="rent">Rent</button>
       </div>
+      <label class="checkbox-label property-overlay-toggle">
+        <input type="checkbox" id="property-overlay" checked />
+        Show estate agents on map
+      </label>
+      <div id="property-marker-status" class="property-marker-status"></div>
       <div class="property-links-list"></div>
     </div>
   `;
@@ -247,6 +256,45 @@ describe('ui', () => {
 
       buttons[1].click();
       expect(onChange).toHaveBeenCalledWith('rent');
+    });
+  });
+
+  describe('isPropertyOverlayEnabled', () => {
+    it('returns true when checkbox is checked', () => {
+      expect(isPropertyOverlayEnabled()).toBe(true);
+    });
+
+    it('returns false when checkbox is unchecked', () => {
+      document.getElementById('property-overlay').checked = false;
+      expect(isPropertyOverlayEnabled()).toBe(false);
+    });
+  });
+
+  describe('setupPropertyOverlayToggle', () => {
+    it('calls onChange with checked state when toggled', () => {
+      const onChange = vi.fn();
+      setupPropertyOverlayToggle(onChange);
+      const checkbox = document.getElementById('property-overlay');
+      checkbox.checked = false;
+      checkbox.dispatchEvent(new Event('change'));
+      expect(onChange).toHaveBeenCalledWith(false);
+    });
+  });
+
+  describe('showPropertyMarkerStatus', () => {
+    it('displays text in the status element', () => {
+      showPropertyMarkerStatus('3 estate agents found');
+      const el = document.getElementById('property-marker-status');
+      expect(el.textContent).toBe('3 estate agents found');
+      expect(el.hidden).toBe(false);
+    });
+  });
+
+  describe('hidePropertyMarkerStatus', () => {
+    it('hides the status element', () => {
+      showPropertyMarkerStatus('test');
+      hidePropertyMarkerStatus();
+      expect(document.getElementById('property-marker-status').hidden).toBe(true);
     });
   });
 });
