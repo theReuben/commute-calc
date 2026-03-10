@@ -26,9 +26,9 @@ export const PROPERTY_PROVIDERS = [
     name: 'Zoopla',
     emoji: '🔍',
     forSale: (location) =>
-      `https://www.zoopla.co.uk/for-sale/details/${encodeURIComponent(location)}/`,
+      `https://www.zoopla.co.uk/for-sale/property/${encodeURIComponent(location)}/`,
     toRent: (location) =>
-      `https://www.zoopla.co.uk/to-rent/details/${encodeURIComponent(location)}/`,
+      `https://www.zoopla.co.uk/to-rent/property/${encodeURIComponent(location)}/`,
   },
   {
     name: 'OnTheMarket',

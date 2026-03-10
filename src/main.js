@@ -120,11 +120,15 @@ export function initApp() {
       updateLegend(intervals);
       showStatus('Commute areas calculated successfully!', 'success');
 
-      // Show property search links for the work location
-      lastSearchLocation = searchInput.value.trim() || `${location.lat.toFixed(4)},${location.lon.toFixed(4)}`;
-      const listingType = getSelectedListingType();
-      const links = getPropertySearchLinks(lastSearchLocation, listingType);
-      showPropertyLinks(links);
+      // Show property search links if a location name is available
+      lastSearchLocation = searchInput.value.trim();
+      if (lastSearchLocation) {
+        const listingType = getSelectedListingType();
+        const links = getPropertySearchLinks(lastSearchLocation, listingType);
+        showPropertyLinks(links);
+      } else {
+        hidePropertyLinks();
+      }
     } catch (err) {
       showStatus(`Error: ${err.message}`, 'error');
     } finally {
