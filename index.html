@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Commute Calculator</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin="" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <div id="sidebar">
+      <h1>Commute Calculator</h1>
+      <p class="subtitle">Visualize commutable areas from your workplace</p>
+
+      <div class="control-group">
+        <label for="location-search">Work Location</label>
+        <div class="search-container">
+          <input
+            type="text"
+            id="location-search"
+            placeholder="Search for an address..."
+            autocomplete="off"
+          />
+          <button id="search-btn" type="button" aria-label="Search">🔍</button>
+        </div>
+        <div id="search-results" class="search-results" hidden></div>
+        <p class="hint">Or click on the map to set your work location</p>
+      </div>
+
+      <div class="control-group">
+        <label for="transport-mode">Transport Mode</label>
+        <div class="transport-modes" id="transport-mode">
+          <button class="mode-btn active" data-mode="driving-car" title="Car">🚗 Car</button>
+          <button class="mode-btn" data-mode="public-transport" title="Public Transport">🚌 Public</button>
+          <button class="mode-btn" data-mode="cycling-regular" title="Cycling">🚲 Cycle</button>
+          <button class="mode-btn" data-mode="foot-walking" title="Walking">🚶 Walk</button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label>Time Intervals (minutes)</label>
+        <div class="time-intervals" id="time-intervals">
+          <label class="checkbox-label">
+            <input type="checkbox" value="10" checked /> 10 min
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" value="20" checked /> 20 min
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" value="30" checked /> 30 min
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" value="45" /> 45 min
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" value="60" /> 60 min
+          </label>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label for="api-key">OpenRouteService API Key</label>
+        <input
+          type="text"
+          id="api-key"
+          placeholder="Enter your ORS API key"
+        />
+        <p class="hint">
+          Get a free key at
+          <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener noreferrer">
+            openrouteservice.org
+          </a>
+        </p>
+      </div>
+
+      <button id="calculate-btn" class="primary-btn" type="button">
+        Calculate Commute Areas
+      </button>
+
+      <div id="status" class="status" hidden></div>
+
+      <div id="legend" class="legend" hidden>
+        <h3>Commute Time</h3>
+        <div id="legend-items"></div>
+      </div>
+    </div>
+
+    <div id="map"></div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
