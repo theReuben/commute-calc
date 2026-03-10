@@ -4,6 +4,7 @@
   "description": "Commute time map overlay tool - visualize commutable areas by transport mode",
   "type": "module",
   "scripts": {
+    "start": "vite --open",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",

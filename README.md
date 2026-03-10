@@ -11,40 +11,32 @@ Visualize commutable areas from your workplace on an interactive map. Enter your
 - **Draggable marker** — Reposition your work location by dragging the marker
 - **Responsive design** — Works on desktop and mobile
 
-## Getting Started
+## Quick Start
 
-### Prerequisites
+> **Prerequisites:** [Node.js](https://nodejs.org/) v18+ and a free [Geoapify](https://myprojects.geoapify.com/register) API key.
 
-- [Node.js](https://nodejs.org/) (v18 or later)
-- A [Geoapify](https://myprojects.geoapify.com/register) API key (free)
-
-### Installation
+**One command** — installs dependencies (if needed) and opens the app in your browser:
 
 ```bash
-npm install
+./start.sh        # macOS / Linux
+start.bat          # Windows
 ```
 
-### Development
+Or with npm:
 
 ```bash
-npm run dev
+npm install && npm start
 ```
 
-Open the URL shown in the terminal (usually `http://localhost:5173`).
+### Other Commands
 
-### Build
-
-```bash
-npm run build
-```
-
-The production build is output to the `dist/` directory.
-
-### Tests
-
-```bash
-npm test
-```
+| Command | Description |
+|---------|-------------|
+| `npm start` | Start dev server and open browser |
+| `npm run dev` | Start dev server (no auto-open) |
+| `npm run build` | Build for production to `dist/` |
+| `npm run preview` | Preview production build |
+| `npm test` | Run tests |
 
 ## Usage
 
