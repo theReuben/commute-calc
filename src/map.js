@@ -17,6 +17,7 @@ export function createMap(elementId) {
   let workMarker = null;
   let isochroneLayer = L.layerGroup().addTo(map);
   let crimeLayer = L.layerGroup().addTo(map);
+  let crimeControl = null;
   let markerDragCallback = null;
 
   /**
@@ -187,6 +188,39 @@ export function createMap(elementId) {
   }
 
   /**
+   * Add a legend control to the map showing crime density levels.
+   * @param {Object} colorMap - Maps density names to {fillColor, color, label}.
+   */
+  function showCrimeMapLegend(colorMap) {
+    clearCrimeMapLegend();
+    crimeControl = L.control({ position: 'bottomright' });
+    crimeControl.onAdd = function () {
+      const container = document.createElement('div');
+      container.className = 'leaflet-control crime-map-legend';
+      ['low', 'medium', 'high', 'very-high'].forEach((level) => {
+        const config = colorMap[level];
+        if (!config) return;
+        const item = document.createElement('div');
+        item.className = 'crime-legend-item';
+        item.innerHTML = `<span class="crime-legend-dot" style="background:${config.fillColor};border-color:${config.color}"></span>${config.label}`;
+        container.appendChild(item);
+      });
+      return container;
+    };
+    crimeControl.addTo(map);
+  }
+
+  /**
+   * Remove the crime legend control from the map.
+   */
+  function clearCrimeMapLegend() {
+    if (crimeControl) {
+      crimeControl.remove();
+      crimeControl = null;
+    }
+  }
+
+  /**
    * Format a crime category slug into a readable label.
    * @param {string} category
    * @returns {string}
@@ -205,6 +239,8 @@ export function createMap(elementId) {
     clearIsochrones,
     showCrimeOverlay,
     clearCrimeOverlay,
+    showCrimeMapLegend,
+    clearCrimeMapLegend,
     onMapClick,
     onMarkerDrag,
   };

@@ -155,9 +155,11 @@ export function initApp() {
 
       if (crimes.length > 0) {
         showCrimeLegend(CRIME_COLORS);
+        mapInstance.showCrimeMapLegend(CRIME_COLORS);
         showCrimeStatus(`${crimes.length} crime${crimes.length !== 1 ? 's' : ''} reported in commute area`);
       } else {
         hideCrimeLegend();
+        mapInstance.clearCrimeMapLegend();
         showCrimeStatus('No recent crime data available for this area');
       }
     } catch (err) {
@@ -171,6 +173,7 @@ export function initApp() {
       loadCrimeOverlay(lastGeojson);
     } else {
       mapInstance.clearCrimeOverlay();
+      mapInstance.clearCrimeMapLegend();
       hideCrimeStatus();
       hideCrimeLegend();
     }
