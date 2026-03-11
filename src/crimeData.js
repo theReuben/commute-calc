@@ -28,7 +28,7 @@ export async function fetchCrimeData({ geojson }) {
   const response = await fetch(`${POLICE_API_URL}/crimes-street/all-crime`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `poly=${polyString}`,
+    body: new URLSearchParams({ poly: polyString }).toString(),
   });
 
   if (!response.ok) {

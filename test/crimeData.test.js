@@ -204,7 +204,7 @@ describe('crimeData', () => {
       const [url, opts] = mockFetch.mock.calls[0];
       expect(url).toContain('data.police.uk');
       expect(opts.method).toBe('POST');
-      expect(opts.body).toContain('poly=');
+      expect(opts.body).toMatch(/^poly=/);
 
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual({
