@@ -28,6 +28,12 @@ vi.mock('leaflet', () => {
     bindTooltip: vi.fn().mockReturnThis(),
   };
 
+  const mockControl = {
+    addTo: vi.fn().mockReturnThis(),
+    remove: vi.fn(),
+    onAdd: null,
+  };
+
   return {
     default: {
       map: vi.fn().mockReturnValue({
@@ -43,10 +49,12 @@ vi.mock('leaflet', () => {
         .mockReturnValueOnce(mockCrimeLayerGroup),
       geoJSON: vi.fn().mockReturnValue({ addTo: vi.fn() }),
       circleMarker: vi.fn().mockReturnValue(mockCircleMarker),
+      control: vi.fn().mockReturnValue(mockControl),
       _mockMarker: mockMarker,
       _mockLayerGroup: mockLayerGroup,
       _mockCrimeLayerGroup: mockCrimeLayerGroup,
       _mockCircleMarker: mockCircleMarker,
+      _mockControl: mockControl,
     },
   };
 });
@@ -60,6 +68,7 @@ describe('map', () => {
   let mockLayerGroup;
   let mockCrimeLayerGroup;
   let mockCircleMarker;
+  let mockControl;
 
   beforeEach(() => {
     // Access the shared mock objects
@@ -67,6 +76,7 @@ describe('map', () => {
     mockLayerGroup = L._mockLayerGroup;
     mockCrimeLayerGroup = L._mockCrimeLayerGroup;
     mockCircleMarker = L._mockCircleMarker;
+    mockControl = L._mockControl;
 
     // Reset mock state
     vi.clearAllMocks();
@@ -79,6 +89,7 @@ describe('map', () => {
     mockCircleMarker.addTo.mockReturnValue(mockCircleMarker);
     mockCircleMarker.bindPopup.mockReturnValue(mockCircleMarker);
     mockCircleMarker.bindTooltip.mockReturnValue(mockCircleMarker);
+    mockControl.addTo.mockReturnValue(mockControl);
 
     // layerGroup is called twice: once for isochrones, once for crime
     L.layerGroup
@@ -274,6 +285,55 @@ describe('map', () => {
     it('clears the crime layer', () => {
       mapInstance.clearCrimeOverlay();
       expect(mockCrimeLayerGroup.clearLayers).toHaveBeenCalled();
+    });
+  });
+
+  describe('showCrimeMapLegend', () => {
+    const colorMap = {
+      low: { fillColor: '#2b8a3e', color: '#1b5e20', label: 'Low crime' },
+      medium: { fillColor: '#f59f00', color: '#e67700', label: 'Medium crime' },
+      high: { fillColor: '#e03131', color: '#c92a2a', label: 'High crime' },
+      'very-high': { fillColor: '#7b2d8e', color: '#5c0a72', label: 'Very high crime' },
+    };
+
+    it('adds a control to the map at bottom-right', () => {
+      mapInstance.showCrimeMapLegend(colorMap);
+      expect(L.control).toHaveBeenCalledWith({ position: 'bottomright' });
+      expect(mockControl.addTo).toHaveBeenCalled();
+    });
+
+    it('removes existing control before adding a new one', () => {
+      mapInstance.showCrimeMapLegend(colorMap);
+      mapInstance.showCrimeMapLegend(colorMap);
+      expect(mockControl.remove).toHaveBeenCalledTimes(1);
+    });
+
+    it('renders an item for each density level', () => {
+      mapInstance.showCrimeMapLegend(colorMap);
+      const container = mockControl.onAdd();
+      expect(container.querySelectorAll('.crime-legend-item').length).toBe(4);
+    });
+
+    it('includes the correct labels in the rendered legend', () => {
+      mapInstance.showCrimeMapLegend(colorMap);
+      const container = mockControl.onAdd();
+      expect(container.textContent).toContain('Low crime');
+      expect(container.textContent).toContain('Medium crime');
+      expect(container.textContent).toContain('High crime');
+      expect(container.textContent).toContain('Very high crime');
+    });
+  });
+
+  describe('clearCrimeMapLegend', () => {
+    it('removes the control when one exists', () => {
+      const colorMap = { low: { fillColor: '#2b8a3e', color: '#1b5e20', label: 'Low crime' } };
+      mapInstance.showCrimeMapLegend(colorMap);
+      mapInstance.clearCrimeMapLegend();
+      expect(mockControl.remove).toHaveBeenCalled();
+    });
+
+    it('does nothing when no control is active', () => {
+      expect(() => mapInstance.clearCrimeMapLegend()).not.toThrow();
     });
   });
 });

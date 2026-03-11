@@ -262,6 +262,31 @@ body {
   padding: 4px 0;
 }
 
+.crime-map-legend {
+  background: white;
+  padding: 8px 10px;
+  border-radius: 6px;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.crime-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.crime-legend-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid;
+  flex-shrink: 0;
+}
+
 @media (max-width: 768px) {
   #app {
     flex-direction: column;
