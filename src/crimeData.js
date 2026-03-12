@@ -1,9 +1,14 @@
 import { POLICE_API_URL } from './config.js';
 
+/** Tile size in degrees (~5.5km at UK latitudes). */
+const TILE_SIZE = 0.05;
+
+/** Maximum concurrent Police API requests. */
+const MAX_CONCURRENT = 5;
+
 /**
- * Fetch street-level crime data from the UK Police API within a polygon.
- * The API accepts a polygon of lat/lon points and returns crimes within it.
- * Limited to the most recent month of available data.
+ * Fetch street-level crime data from the UK Police API within an isochrone area.
+ * Splits the area into small rectangular tiles to avoid the API's area-size limit.
  *
  * @param {Object} params
  * @param {Object} params.geojson - GeoJSON FeatureCollection (isochrone result).
@@ -14,39 +19,19 @@ export async function fetchCrimeData({ geojson }) {
     throw new Error('Isochrone GeoJSON is required');
   }
 
-  // Use the outermost isochrone (largest time interval) for the query area
   const outerFeature = getOuterFeature(geojson);
   if (!outerFeature) {
     throw new Error('Could not extract polygon from isochrone');
   }
 
-  const polyString = extractPolyString(outerFeature);
-  if (!polyString) {
+  const bbox = getBoundingBox(outerFeature);
+  if (!bbox) {
     throw new Error('Could not extract coordinates from isochrone polygon');
   }
 
-  const response = await fetch(`${POLICE_API_URL}/crimes-street/all-crime`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ poly: polyString }).toString(),
-  });
-
-  if (!response.ok) {
-    if (response.status === 503) {
-      throw new Error('Police API area too large — try a shorter commute time');
-    }
-    throw new Error(`Crime data request failed: ${response.status}`);
-  }
-
-  const crimes = await response.json();
-
-  return crimes.map((crime) => ({
-    category: crime.category || 'unknown',
-    lat: parseFloat(crime.location?.latitude),
-    lon: parseFloat(crime.location?.longitude),
-    month: crime.month || '',
-    location: crime.location?.street?.name || '',
-  })).filter((c) => !isNaN(c.lat) && !isNaN(c.lon));
+  const tiles = createTiles(bbox, TILE_SIZE);
+  const allCrimes = await fetchCrimesInTiles(tiles, MAX_CONCURRENT);
+  return deduplicateCrimes(allCrimes);
 }
 
 /**
@@ -66,56 +51,147 @@ export function getOuterFeature(geojson) {
 }
 
 /**
- * Extract a simplified polygon string for the Police API from a GeoJSON feature.
- * The Police API accepts: lat,lon:lat,lon:lat,lon
- * Simplifies the polygon to max ~80 points to stay within API limits.
- *
- * @param {Object} feature - GeoJSON Feature with Polygon/MultiPolygon geometry.
- * @returns {string|null} Polygon string for the Police API.
+ * Compute the bounding box of a GeoJSON Polygon or MultiPolygon feature.
+ * @param {Object} feature - GeoJSON Feature.
+ * @returns {{minLat: number, maxLat: number, minLon: number, maxLon: number}|null}
  */
-export function extractPolyString(feature) {
+export function getBoundingBox(feature) {
   if (!feature?.geometry?.coordinates) return null;
 
-  let coords;
   const geomType = feature.geometry.type;
+  let rings;
 
   if (geomType === 'Polygon') {
-    coords = feature.geometry.coordinates[0]; // outer ring
+    rings = feature.geometry.coordinates;
   } else if (geomType === 'MultiPolygon') {
-    // Use the largest polygon ring
-    let maxLen = 0;
-    feature.geometry.coordinates.forEach((polygon) => {
-      if (polygon[0] && polygon[0].length > maxLen) {
-        coords = polygon[0];
-        maxLen = polygon[0].length;
-      }
-    });
+    rings = feature.geometry.coordinates.flat();
+  } else {
+    return null;
   }
 
-  if (!coords || coords.length < 3) return null;
+  let minLon = Infinity, maxLon = -Infinity;
+  let minLat = Infinity, maxLat = -Infinity;
 
-  // Simplify to ~80 points to avoid API limits
-  const simplified = simplifyCoords(coords, 80);
+  rings.forEach((ring) => {
+    ring.forEach(([lon, lat]) => {
+      if (lon < minLon) minLon = lon;
+      if (lon > maxLon) maxLon = lon;
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+    });
+  });
 
-  // Police API format: lat,lon:lat,lon:...
-  return simplified.map((c) => `${c[1]},${c[0]}`).join(':');
+  if (!isFinite(minLon)) return null;
+
+  return { minLat, maxLat, minLon, maxLon };
 }
 
 /**
- * Simplify a coordinate array by sampling evenly spaced points.
- * @param {Array<[number, number]>} coords - GeoJSON coordinates [lon, lat].
- * @param {number} maxPoints - Maximum number of points to keep.
- * @returns {Array<[number, number]>}
+ * Split a bounding box into rectangular tiles of a given size.
+ * Each tile is a small bbox suitable for a single Police API request.
+ * @param {{minLat: number, maxLat: number, minLon: number, maxLon: number}} bbox
+ * @param {number} size - Tile size in degrees.
+ * @returns {Array<{minLat: number, maxLat: number, minLon: number, maxLon: number}>}
  */
-export function simplifyCoords(coords, maxPoints) {
-  if (coords.length <= maxPoints) return coords;
-
-  const step = (coords.length - 1) / (maxPoints - 1);
-  const result = [];
-  for (let i = 0; i < maxPoints; i++) {
-    result.push(coords[Math.round(i * step)]);
+export function createTiles(bbox, size) {
+  const tiles = [];
+  for (let lat = bbox.minLat; lat < bbox.maxLat; lat += size) {
+    for (let lon = bbox.minLon; lon < bbox.maxLon; lon += size) {
+      tiles.push({
+        minLat: lat,
+        maxLat: Math.min(lat + size, bbox.maxLat),
+        minLon: lon,
+        maxLon: Math.min(lon + size, bbox.maxLon),
+      });
+    }
   }
-  return result;
+  return tiles;
+}
+
+/**
+ * Convert a tile bounding box to a Police API polygon string.
+ * @param {{minLat: number, maxLat: number, minLon: number, maxLon: number}} tile
+ * @returns {string} Polygon string in "lat,lon:lat,lon:..." format.
+ */
+export function tileToPolyString(tile) {
+  return [
+    `${tile.minLat},${tile.minLon}`,
+    `${tile.maxLat},${tile.minLon}`,
+    `${tile.maxLat},${tile.maxLon}`,
+    `${tile.minLat},${tile.maxLon}`,
+  ].join(':');
+}
+
+/**
+ * Fetch crime data for a single tile polygon.
+ * Returns an empty array if the request fails (graceful degradation).
+ * @param {string} polyString - Police API polygon string.
+ * @returns {Promise<Array>} Raw crime objects from the API.
+ */
+async function fetchSingleTile(polyString) {
+  const response = await fetch(`${POLICE_API_URL}/crimes-street/all-crime`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ poly: polyString }).toString(),
+  });
+
+  if (!response.ok) {
+    // Gracefully skip tiles that fail (e.g. 503 for area still too large, or no data)
+    return [];
+  }
+
+  return response.json();
+}
+
+/**
+ * Fetch crimes across all tiles with a concurrency limit.
+ * @param {Array} tiles - Array of tile bounding boxes.
+ * @param {number} maxConcurrent - Maximum parallel requests.
+ * @returns {Promise<Array<{category: string, lat: number, lon: number, month: string, location: string}>>}
+ */
+export async function fetchCrimesInTiles(tiles, maxConcurrent) {
+  const results = [];
+
+  for (let i = 0; i < tiles.length; i += maxConcurrent) {
+    const batch = tiles.slice(i, i + maxConcurrent);
+    const batchResults = await Promise.all(
+      batch.map((tile) => fetchSingleTile(tileToPolyString(tile)))
+    );
+
+    for (const crimes of batchResults) {
+      for (const crime of crimes) {
+        const lat = parseFloat(crime.location?.latitude);
+        const lon = parseFloat(crime.location?.longitude);
+        if (isNaN(lat) || isNaN(lon)) continue;
+
+        results.push({
+          category: crime.category || 'unknown',
+          lat,
+          lon,
+          month: crime.month || '',
+          location: crime.location?.street?.name || '',
+        });
+      }
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Remove duplicate crime records that appear in overlapping tiles.
+ * Deduplicates by category + lat + lon + month.
+ * @param {Array} crimes
+ * @returns {Array}
+ */
+export function deduplicateCrimes(crimes) {
+  const seen = new Set();
+  return crimes.filter((crime) => {
+    const key = `${crime.category}|${crime.lat}|${crime.lon}|${crime.month}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 /**

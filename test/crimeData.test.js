@@ -2,8 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   fetchCrimeData,
   getOuterFeature,
-  extractPolyString,
-  simplifyCoords,
+  getBoundingBox,
+  createTiles,
+  tileToPolyString,
+  fetchCrimesInTiles,
+  deduplicateCrimes,
   aggregateCrimes,
   classifyCrimeDensity,
   CRIME_COLORS,
@@ -12,21 +15,6 @@ import {
 describe('crimeData', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-  });
-
-  describe('simplifyCoords', () => {
-    it('returns coords unchanged when below maxPoints', () => {
-      const coords = [[0, 1], [2, 3], [4, 5]];
-      expect(simplifyCoords(coords, 10)).toEqual(coords);
-    });
-
-    it('simplifies to the requested number of points', () => {
-      const coords = Array.from({ length: 100 }, (_, i) => [i, i]);
-      const result = simplifyCoords(coords, 10);
-      expect(result).toHaveLength(10);
-      expect(result[0]).toEqual([0, 0]);
-      expect(result[result.length - 1]).toEqual([99, 99]);
-    });
   });
 
   describe('getOuterFeature', () => {
@@ -54,45 +42,180 @@ describe('crimeData', () => {
     });
   });
 
-  describe('extractPolyString', () => {
-    it('converts Polygon coordinates to Police API format', () => {
+  describe('getBoundingBox', () => {
+    it('computes bounding box for a Polygon', () => {
       const feature = {
         geometry: {
           type: 'Polygon',
-          coordinates: [[[-0.1, 51.5], [-0.2, 51.6], [-0.15, 51.55], [-0.1, 51.5]]],
+          coordinates: [[[-0.2, 51.4], [0.0, 51.6], [0.1, 51.5], [-0.2, 51.4]]],
         },
       };
-      const result = extractPolyString(feature);
-      expect(result).toContain('51.5,-0.1');
-      expect(result).toContain(':');
+      const bbox = getBoundingBox(feature);
+      expect(bbox.minLat).toBeCloseTo(51.4);
+      expect(bbox.maxLat).toBeCloseTo(51.6);
+      expect(bbox.minLon).toBeCloseTo(-0.2);
+      expect(bbox.maxLon).toBeCloseTo(0.1);
     });
 
-    it('handles MultiPolygon by using largest ring', () => {
+    it('computes bounding box for a MultiPolygon', () => {
       const feature = {
         geometry: {
           type: 'MultiPolygon',
           coordinates: [
             [[[-0.1, 51.5], [-0.2, 51.6], [-0.1, 51.5]]],
-            [[[-0.3, 51.4], [-0.4, 51.7], [-0.5, 51.5], [-0.6, 51.6], [-0.3, 51.4]]],
+            [[[-0.3, 51.4], [-0.4, 51.7], [-0.3, 51.4]]],
           ],
         },
       };
-      const result = extractPolyString(feature);
-      expect(result).toBeDefined();
-      // Should use the polygon with more points
-      expect(result.split(':').length).toBeGreaterThanOrEqual(4);
+      const bbox = getBoundingBox(feature);
+      expect(bbox.minLat).toBeCloseTo(51.4);
+      expect(bbox.maxLat).toBeCloseTo(51.7);
+      expect(bbox.minLon).toBeCloseTo(-0.4);
+      expect(bbox.maxLon).toBeCloseTo(-0.1);
     });
 
     it('returns null for missing geometry', () => {
-      expect(extractPolyString({})).toBeNull();
-      expect(extractPolyString({ geometry: {} })).toBeNull();
+      expect(getBoundingBox({})).toBeNull();
+      expect(getBoundingBox({ geometry: {} })).toBeNull();
     });
 
-    it('returns null for too few coordinates', () => {
-      const feature = {
-        geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 1]]] },
-      };
-      expect(extractPolyString(feature)).toBeNull();
+    it('returns null for unsupported geometry type', () => {
+      expect(getBoundingBox({ geometry: { type: 'Point', coordinates: [0, 0] } })).toBeNull();
+    });
+  });
+
+  describe('createTiles', () => {
+    it('creates tiles covering the bounding box', () => {
+      const bbox = { minLat: 51.4, maxLat: 51.5, minLon: -0.2, maxLon: -0.1 };
+      const tiles = createTiles(bbox, 0.05);
+      expect(tiles.length).toBeGreaterThanOrEqual(4);
+      // Every tile should be within the bounding box
+      tiles.forEach((tile) => {
+        expect(tile.minLat).toBeGreaterThanOrEqual(bbox.minLat - 0.001);
+        expect(tile.maxLat).toBeLessThanOrEqual(bbox.maxLat + 0.001);
+        expect(tile.minLon).toBeGreaterThanOrEqual(bbox.minLon - 0.001);
+        expect(tile.maxLon).toBeLessThanOrEqual(bbox.maxLon + 0.001);
+      });
+    });
+
+    it('creates a single tile for a small area', () => {
+      const bbox = { minLat: 51.5, maxLat: 51.51, minLon: -0.1, maxLon: -0.09 };
+      const tiles = createTiles(bbox, 0.05);
+      expect(tiles.length).toBe(1);
+    });
+  });
+
+  describe('tileToPolyString', () => {
+    it('converts a tile to Police API polygon format', () => {
+      const tile = { minLat: 51.4, maxLat: 51.5, minLon: -0.2, maxLon: -0.1 };
+      const result = tileToPolyString(tile);
+      expect(result).toBe('51.4,-0.2:51.5,-0.2:51.5,-0.1:51.4,-0.1');
+    });
+  });
+
+  describe('deduplicateCrimes', () => {
+    it('removes duplicate crimes', () => {
+      const crimes = [
+        { category: 'theft', lat: 51.5, lon: -0.1, month: '2025-01', location: 'A St' },
+        { category: 'theft', lat: 51.5, lon: -0.1, month: '2025-01', location: 'A St' },
+        { category: 'burglary', lat: 51.5, lon: -0.1, month: '2025-01', location: 'A St' },
+      ];
+      const result = deduplicateCrimes(crimes);
+      expect(result).toHaveLength(2);
+    });
+
+    it('keeps crimes with different locations', () => {
+      const crimes = [
+        { category: 'theft', lat: 51.5, lon: -0.1, month: '2025-01', location: 'A' },
+        { category: 'theft', lat: 51.6, lon: -0.2, month: '2025-01', location: 'B' },
+      ];
+      expect(deduplicateCrimes(crimes)).toHaveLength(2);
+    });
+
+    it('returns empty array for empty input', () => {
+      expect(deduplicateCrimes([])).toEqual([]);
+    });
+  });
+
+  describe('fetchCrimesInTiles', () => {
+    it('fetches crimes from multiple tiles and merges results', async () => {
+      const mockCrimes1 = [
+        { category: 'theft', location: { latitude: '51.5', longitude: '-0.1', street: { name: 'A St' } }, month: '2025-01' },
+      ];
+      const mockCrimes2 = [
+        { category: 'burglary', location: { latitude: '51.6', longitude: '-0.2', street: { name: 'B St' } }, month: '2025-01' },
+      ];
+
+      vi.stubGlobal('fetch', vi.fn()
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockCrimes1) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockCrimes2) }));
+
+      const tiles = [
+        { minLat: 51.4, maxLat: 51.5, minLon: -0.2, maxLon: -0.1 },
+        { minLat: 51.5, maxLat: 51.6, minLon: -0.2, maxLon: -0.1 },
+      ];
+
+      const result = await fetchCrimesInTiles(tiles, 5);
+      expect(result).toHaveLength(2);
+      const categories = result.map((c) => c.category).sort();
+      expect(categories).toEqual(['burglary', 'theft']);
+    });
+
+    it('skips tiles that return errors', async () => {
+      vi.stubGlobal('fetch', vi.fn()
+        .mockResolvedValueOnce({ ok: false, status: 503 })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve([
+            { category: 'theft', location: { latitude: '51.5', longitude: '-0.1', street: {} }, month: '' },
+          ]),
+        }));
+
+      const tiles = [
+        { minLat: 51.4, maxLat: 51.5, minLon: -0.2, maxLon: -0.1 },
+        { minLat: 51.5, maxLat: 51.6, minLon: -0.2, maxLon: -0.1 },
+      ];
+
+      const result = await fetchCrimesInTiles(tiles, 5);
+      expect(result).toHaveLength(1);
+    });
+
+    it('filters out crimes with invalid coordinates', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve([
+          { category: 'theft', location: { latitude: '51.5', longitude: '-0.1', street: {} }, month: '' },
+          { category: 'theft', location: { latitude: 'NaN', longitude: 'NaN', street: {} }, month: '' },
+        ]),
+      }));
+
+      const tiles = [{ minLat: 51.4, maxLat: 51.5, minLon: -0.2, maxLon: -0.1 }];
+      const result = await fetchCrimesInTiles(tiles, 5);
+      expect(result).toHaveLength(1);
+    });
+
+    it('respects concurrency limit', async () => {
+      let maxConcurrent = 0;
+      let inFlight = 0;
+
+      vi.stubGlobal('fetch', vi.fn().mockImplementation(() => {
+        inFlight++;
+        maxConcurrent = Math.max(maxConcurrent, inFlight);
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            inFlight--;
+            resolve({ ok: true, json: () => Promise.resolve([]) });
+          }, 10);
+        });
+      }));
+
+      const tiles = Array.from({ length: 10 }, (_, i) => ({
+        minLat: 51.0 + i * 0.05, maxLat: 51.05 + i * 0.05,
+        minLon: -0.2, maxLon: -0.1,
+      }));
+
+      await fetchCrimesInTiles(tiles, 3);
+      expect(maxConcurrent).toBeLessThanOrEqual(3);
     });
   });
 
@@ -173,7 +296,7 @@ describe('crimeData', () => {
       await expect(fetchCrimeData({ geojson: { features: [] } })).rejects.toThrow('Isochrone GeoJSON is required');
     });
 
-    it('sends correct POST request to Police API', async () => {
+    it('fetches crime data using tile-based approach', async () => {
       const mockCrimes = [
         {
           category: 'burglary',
@@ -182,32 +305,32 @@ describe('crimeData', () => {
         },
       ];
 
-      const mockFetch = vi.fn().mockResolvedValue({
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
         ok: true,
         json: () => Promise.resolve(mockCrimes),
-      });
-      vi.stubGlobal('fetch', mockFetch);
+      }));
 
       const geojson = {
         features: [{
           properties: { value: 1800 },
           geometry: {
             type: 'Polygon',
-            coordinates: [[[-0.2, 51.4], [0.0, 51.6], [0.1, 51.5], [-0.2, 51.4]]],
+            coordinates: [[[-0.12, 51.49], [-0.08, 51.51], [-0.10, 51.50], [-0.12, 51.49]]],
           },
         }],
       };
 
       const result = await fetchCrimeData({ geojson });
 
-      expect(mockFetch).toHaveBeenCalledOnce();
-      const [url, opts] = mockFetch.mock.calls[0];
+      // Should have made at least one fetch call
+      expect(fetch).toHaveBeenCalled();
+      const [url, opts] = fetch.mock.calls[0];
       expect(url).toContain('data.police.uk');
       expect(opts.method).toBe('POST');
       expect(opts.body).toMatch(/^poly=/);
 
-      expect(result).toHaveLength(1);
-      expect(result[0]).toEqual({
+      expect(result.length).toBeGreaterThanOrEqual(1);
+      expect(result[0]).toMatchObject({
         category: 'burglary',
         lat: 51.5,
         lon: -0.1,
@@ -216,15 +339,16 @@ describe('crimeData', () => {
       });
     });
 
-    it('filters out crimes with invalid coordinates', async () => {
-      const mockCrimes = [
-        { category: 'theft', location: { latitude: '51.5', longitude: '-0.1', street: {} }, month: '' },
-        { category: 'theft', location: { latitude: 'NaN', longitude: 'NaN', street: {} }, month: '' },
-      ];
+    it('deduplicates crimes across tiles', async () => {
+      const sameCrime = {
+        category: 'burglary',
+        location: { latitude: '51.5', longitude: '-0.1', street: { name: 'A St' } },
+        month: '2025-01',
+      };
 
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve(mockCrimes),
+        json: () => Promise.resolve([sameCrime]),
       }));
 
       const geojson = {
@@ -232,19 +356,30 @@ describe('crimeData', () => {
           properties: { value: 600 },
           geometry: {
             type: 'Polygon',
-            coordinates: [[[-0.2, 51.4], [0.0, 51.6], [0.1, 51.5], [-0.2, 51.4]]],
+            coordinates: [[[-0.12, 51.49], [-0.08, 51.51], [-0.10, 51.50], [-0.12, 51.49]]],
           },
         }],
       };
 
       const result = await fetchCrimeData({ geojson });
-      expect(result).toHaveLength(1);
+      // Even if multiple tiles return the same crime, it should appear only once
+      const matching = result.filter((c) => c.category === 'burglary' && c.lat === 51.5 && c.lon === -0.1);
+      expect(matching).toHaveLength(1);
     });
 
-    it('throws on 503 with area too large message', async () => {
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-        ok: false,
-        status: 503,
+    it('handles tile failures gracefully without throwing', async () => {
+      let callNum = 0;
+      vi.stubGlobal('fetch', vi.fn().mockImplementation(() => {
+        callNum++;
+        if (callNum === 1) {
+          return Promise.resolve({ ok: false, status: 503 });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([
+            { category: 'theft', location: { latitude: '51.5', longitude: '-0.1', street: {} }, month: '2025-01' },
+          ]),
+        });
       }));
 
       const geojson = {
@@ -252,31 +387,14 @@ describe('crimeData', () => {
           properties: { value: 3600 },
           geometry: {
             type: 'Polygon',
-            coordinates: [[[-1, 50], [1, 52], [0, 51], [-1, 50]]],
+            coordinates: [[[-0.15, 51.45], [-0.05, 51.55], [-0.10, 51.50], [-0.15, 51.45]]],
           },
         }],
       };
 
-      await expect(fetchCrimeData({ geojson })).rejects.toThrow('area too large');
-    });
-
-    it('throws on other API errors', async () => {
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-        ok: false,
-        status: 500,
-      }));
-
-      const geojson = {
-        features: [{
-          properties: { value: 600 },
-          geometry: {
-            type: 'Polygon',
-            coordinates: [[[-0.2, 51.4], [0.0, 51.6], [0.1, 51.5], [-0.2, 51.4]]],
-          },
-        }],
-      };
-
-      await expect(fetchCrimeData({ geojson })).rejects.toThrow('500');
+      // Should NOT throw — gracefully degrades by skipping failed tiles
+      const result = await fetchCrimeData({ geojson });
+      expect(Array.isArray(result)).toBe(true);
     });
   });
 });
