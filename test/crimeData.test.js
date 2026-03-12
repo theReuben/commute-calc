@@ -5,6 +5,7 @@ import {
   getBoundingBox,
   createTiles,
   tileToPolyString,
+  subdivideTile,
   fetchCrimesInTiles,
   deduplicateCrimes,
   aggregateCrimes,
@@ -162,9 +163,9 @@ describe('crimeData', () => {
       expect(categories).toEqual(['burglary', 'theft']);
     });
 
-    it('skips tiles that return errors', async () => {
+    it('skips tiles that return non-503 errors', async () => {
       vi.stubGlobal('fetch', vi.fn()
-        .mockResolvedValueOnce({ ok: false, status: 503 })
+        .mockResolvedValueOnce({ ok: false, status: 404 })
         .mockResolvedValueOnce({
           ok: true,
           json: () => Promise.resolve([
@@ -179,6 +180,28 @@ describe('crimeData', () => {
 
       const result = await fetchCrimesInTiles(tiles, 5);
       expect(result).toHaveLength(1);
+    });
+
+    it('subdivides tiles on 503 and retries', async () => {
+      // First call returns 503, subsequent subdivision calls succeed
+      vi.stubGlobal('fetch', vi.fn()
+        .mockResolvedValueOnce({ ok: false, status: 503 })
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve([
+            { category: 'theft', location: { latitude: '51.45', longitude: '-0.15', street: {} }, month: '' },
+          ]),
+        }));
+
+      const tiles = [
+        { minLat: 51.4, maxLat: 51.5, minLon: -0.2, maxLon: -0.1 },
+      ];
+
+      const result = await fetchCrimesInTiles(tiles, 5);
+      // The 503 tile gets subdivided into 4, each returning 1 crime
+      expect(result.length).toBeGreaterThanOrEqual(1);
+      // Should have made more than 1 fetch call (original + subdivision)
+      expect(fetch).toHaveBeenCalledTimes(5); // 1 original + 4 sub-tiles
     });
 
     it('filters out crimes with invalid coordinates', async () => {

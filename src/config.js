@@ -36,6 +36,14 @@ export const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 /** UK Police API base URL (no API key required) */
 export const POLICE_API_URL = 'https://data.police.uk/api';
 
+/** Color scheme for liveability levels (red-yellow-green gradient). */
+export const LIVEABILITY_COLORS = {
+  'excellent': { fillColor: '#2b8a3e', color: '#1b5e20', label: 'Excellent' },
+  'good': { fillColor: '#74b816', color: '#5c940d', label: 'Good' },
+  'fair': { fillColor: '#f59f00', color: '#e67700', label: 'Fair' },
+  'poor': { fillColor: '#e03131', color: '#c92a2a', label: 'Poor' },
+};
+
 /**
  * Geoapify API key from environment variable (set via VITE_GEOAPIFY_API_KEY).
  * Falls back to empty string if not configured.

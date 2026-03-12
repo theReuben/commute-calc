@@ -17,7 +17,9 @@ export function createMap(elementId) {
   let workMarker = null;
   let isochroneLayer = L.featureGroup().addTo(map);
   let crimeLayer = L.layerGroup().addTo(map);
+  let liveabilityLayer = L.layerGroup().addTo(map);
   let crimeControl = null;
+  let liveabilityControl = null;
   let markerDragCallback = null;
 
   /**
@@ -232,6 +234,89 @@ export function createMap(elementId) {
   }
 
   /**
+   * Display liveability heatmap rectangles on the map.
+   * @param {Array<{lat: number, lon: number, score: number, level: string, commuteScore: number, crimeScore: number, crimeCount: number}>} gridCells
+   * @param {Object} colorMap - Maps liveability levels to {fillColor, color}.
+   * @param {number} cellSize - Grid cell size in degrees.
+   */
+  function showLiveabilityOverlay(gridCells, colorMap, cellSize) {
+    clearLiveabilityOverlay();
+
+    gridCells.forEach((cell) => {
+      const colors = colorMap[cell.level] || { fillColor: '#adb5bd', color: '#495057' };
+      const half = cellSize / 2;
+      const bounds = [
+        [cell.lat - half, cell.lon - half],
+        [cell.lat + half, cell.lon + half],
+      ];
+
+      const rect = L.rectangle(bounds, {
+        fillColor: colors.fillColor,
+        color: colors.color,
+        weight: 0.5,
+        opacity: 0.4,
+        fillOpacity: 0.45,
+      }).addTo(liveabilityLayer);
+
+      const pct = (cell.score * 100).toFixed(0);
+      const tooltipText = `Liveability: ${pct}%`;
+      rect.bindTooltip(tooltipText, { direction: 'top', offset: [0, -6] });
+
+      const commutePct = (cell.commuteScore * 100).toFixed(0);
+      const crimePct = (cell.crimeScore * 100).toFixed(0);
+      rect.bindPopup(
+        `<strong>Liveability: ${pct}%</strong><br>` +
+        `Commute: ${commutePct}%<br>` +
+        `Safety: ${crimePct}%<br>` +
+        `Crimes nearby: ${cell.crimeCount}`
+      );
+    });
+  }
+
+  /**
+   * Remove all liveability overlay layers from the map.
+   */
+  function clearLiveabilityOverlay() {
+    liveabilityLayer.clearLayers();
+  }
+
+  /**
+   * Add a legend control to the map showing liveability levels.
+   * @param {Object} colorMap - Maps level names to {fillColor, color, label}.
+   */
+  function showLiveabilityMapLegend(colorMap) {
+    clearLiveabilityMapLegend();
+    liveabilityControl = L.control({ position: 'bottomright' });
+    liveabilityControl.onAdd = function () {
+      const container = document.createElement('div');
+      container.className = 'leaflet-control liveability-map-legend';
+      const title = document.createElement('strong');
+      title.textContent = 'Liveability';
+      container.appendChild(title);
+      ['excellent', 'good', 'fair', 'poor'].forEach((level) => {
+        const config = colorMap[level];
+        if (!config) return;
+        const item = document.createElement('div');
+        item.className = 'liveability-legend-item';
+        item.innerHTML = `<span class="liveability-legend-swatch" style="background:${config.fillColor};border-color:${config.color}"></span>${config.label}`;
+        container.appendChild(item);
+      });
+      return container;
+    };
+    liveabilityControl.addTo(map);
+  }
+
+  /**
+   * Remove the liveability legend control from the map.
+   */
+  function clearLiveabilityMapLegend() {
+    if (liveabilityControl) {
+      liveabilityControl.remove();
+      liveabilityControl = null;
+    }
+  }
+
+  /**
    * Get the current zoom level of the map.
    * @returns {number}
    */
@@ -259,6 +344,10 @@ export function createMap(elementId) {
     clearCrimeOverlay,
     showCrimeMapLegend,
     clearCrimeMapLegend,
+    showLiveabilityOverlay,
+    clearLiveabilityOverlay,
+    showLiveabilityMapLegend,
+    clearLiveabilityMapLegend,
     onMapClick,
     onMarkerDrag,
     getZoom,

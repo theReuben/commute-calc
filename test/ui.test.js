@@ -11,11 +11,15 @@ import {
   hideSearchResults,
   setupModeButtons,
   isCrimeOverlayEnabled,
+  getOverlayMode,
+  setupOverlayModeButtons,
   setupCrimeOverlayToggle,
   showCrimeStatus,
   hideCrimeStatus,
   showCrimeLegend,
   hideCrimeLegend,
+  showLiveabilityLegend,
+  hideLiveabilityLegend,
 } from '../src/ui.js';
 
 function setupDOM() {
@@ -36,13 +40,17 @@ function setupDOM() {
     <input type="text" id="api-key" value="" />
     <div id="search-results" hidden></div>
     <div id="crime-section" class="crime-section">
-      <label class="checkbox-label crime-overlay-toggle">
-        <input type="checkbox" id="crime-overlay" checked />
-        Show crime data on map
-      </label>
+      <div class="overlay-mode-selector" id="overlay-mode">
+        <button class="overlay-mode-btn" data-overlay="none">Off</button>
+        <button class="overlay-mode-btn" data-overlay="crime">Crime</button>
+        <button class="overlay-mode-btn active" data-overlay="liveability">Liveability</button>
+      </div>
       <div id="crime-status" class="crime-status" hidden></div>
       <div id="crime-legend" class="crime-legend" hidden>
         <div id="crime-legend-items"></div>
+      </div>
+      <div id="liveability-legend" class="crime-legend" hidden>
+        <div id="liveability-legend-items"></div>
       </div>
     </div>
   `;
@@ -187,24 +195,51 @@ describe('ui', () => {
   });
 
   describe('isCrimeOverlayEnabled', () => {
-    it('returns true when checkbox is checked', () => {
+    it('returns true when overlay mode is liveability (default)', () => {
       expect(isCrimeOverlayEnabled()).toBe(true);
     });
 
-    it('returns false when checkbox is unchecked', () => {
-      document.getElementById('crime-overlay').checked = false;
+    it('returns true when overlay mode is crime', () => {
+      const buttons = document.querySelectorAll('.overlay-mode-btn');
+      buttons.forEach((b) => b.classList.remove('active'));
+      document.querySelector('[data-overlay="crime"]').classList.add('active');
+      expect(isCrimeOverlayEnabled()).toBe(true);
+    });
+
+    it('returns false when overlay mode is none', () => {
+      const buttons = document.querySelectorAll('.overlay-mode-btn');
+      buttons.forEach((b) => b.classList.remove('active'));
+      document.querySelector('[data-overlay="none"]').classList.add('active');
       expect(isCrimeOverlayEnabled()).toBe(false);
     });
   });
 
-  describe('setupCrimeOverlayToggle', () => {
-    it('calls onChange with checked state when toggled', () => {
+  describe('getOverlayMode', () => {
+    it('returns liveability by default', () => {
+      expect(getOverlayMode()).toBe('liveability');
+    });
+
+    it('returns the active overlay mode', () => {
+      const buttons = document.querySelectorAll('.overlay-mode-btn');
+      buttons.forEach((b) => b.classList.remove('active'));
+      document.querySelector('[data-overlay="crime"]').classList.add('active');
+      expect(getOverlayMode()).toBe('crime');
+    });
+  });
+
+  describe('setupOverlayModeButtons', () => {
+    it('calls onChange with the selected mode when clicked', () => {
       const onChange = vi.fn();
-      setupCrimeOverlayToggle(onChange);
-      const checkbox = document.getElementById('crime-overlay');
-      checkbox.checked = false;
-      checkbox.dispatchEvent(new Event('change'));
-      expect(onChange).toHaveBeenCalledWith(false);
+      setupOverlayModeButtons(onChange);
+      document.querySelector('[data-overlay="crime"]').click();
+      expect(onChange).toHaveBeenCalledWith('crime');
+    });
+
+    it('switches active class to clicked button', () => {
+      setupOverlayModeButtons(vi.fn());
+      document.querySelector('[data-overlay="none"]').click();
+      expect(document.querySelector('[data-overlay="none"]').classList.contains('active')).toBe(true);
+      expect(document.querySelector('[data-overlay="liveability"]').classList.contains('active')).toBe(false);
     });
   });
 
