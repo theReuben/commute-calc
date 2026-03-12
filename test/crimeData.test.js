@@ -3,11 +3,11 @@ import {
   fetchCrimeData,
   getOuterFeature,
   getBoundingBox,
-  createTiles,
-  tileToPolyString,
-  fetchCrimesInTiles,
-  deduplicateCrimes,
-  aggregateCrimes,
+  createSampleGrid,
+  locateNeighbourhood,
+  discoverNeighbourhoods,
+  enrichNeighbourhoods,
+  fetchAllNeighbourhoodCrimes,
   classifyCrimeDensity,
   CRIME_COLORS,
 } from '../src/crimeData.js';
@@ -84,168 +84,182 @@ describe('crimeData', () => {
     });
   });
 
-  describe('createTiles', () => {
-    it('creates tiles covering the bounding box', () => {
+  describe('createSampleGrid', () => {
+    it('creates grid points covering the bounding box', () => {
       const bbox = { minLat: 51.4, maxLat: 51.5, minLon: -0.2, maxLon: -0.1 };
-      const tiles = createTiles(bbox, 0.05);
-      expect(tiles.length).toBeGreaterThanOrEqual(4);
-      // Every tile should be within the bounding box
-      tiles.forEach((tile) => {
-        expect(tile.minLat).toBeGreaterThanOrEqual(bbox.minLat - 0.001);
-        expect(tile.maxLat).toBeLessThanOrEqual(bbox.maxLat + 0.001);
-        expect(tile.minLon).toBeGreaterThanOrEqual(bbox.minLon - 0.001);
-        expect(tile.maxLon).toBeLessThanOrEqual(bbox.maxLon + 0.001);
+      const points = createSampleGrid(bbox, 0.05);
+      expect(points.length).toBeGreaterThanOrEqual(4);
+      points.forEach((p) => {
+        expect(p.lat).toBeGreaterThanOrEqual(bbox.minLat - 0.001);
+        expect(p.lat).toBeLessThanOrEqual(bbox.maxLat + 0.001);
+        expect(p.lon).toBeGreaterThanOrEqual(bbox.minLon - 0.001);
+        expect(p.lon).toBeLessThanOrEqual(bbox.maxLon + 0.001);
       });
     });
 
-    it('creates a single tile for a small area', () => {
+    it('creates a single point for a small area', () => {
       const bbox = { minLat: 51.5, maxLat: 51.51, minLon: -0.1, maxLon: -0.09 };
-      const tiles = createTiles(bbox, 0.05);
-      expect(tiles.length).toBe(1);
+      const points = createSampleGrid(bbox, 0.08);
+      expect(points.length).toBe(1);
     });
   });
 
-  describe('tileToPolyString', () => {
-    it('converts a tile to Police API polygon format', () => {
-      const tile = { minLat: 51.4, maxLat: 51.5, minLon: -0.2, maxLon: -0.1 };
-      const result = tileToPolyString(tile);
-      expect(result).toBe('51.4,-0.2:51.5,-0.2:51.5,-0.1:51.4,-0.1');
-    });
-  });
-
-  describe('deduplicateCrimes', () => {
-    it('removes duplicate crimes', () => {
-      const crimes = [
-        { category: 'theft', lat: 51.5, lon: -0.1, month: '2025-01', location: 'A St' },
-        { category: 'theft', lat: 51.5, lon: -0.1, month: '2025-01', location: 'A St' },
-        { category: 'burglary', lat: 51.5, lon: -0.1, month: '2025-01', location: 'A St' },
-      ];
-      const result = deduplicateCrimes(crimes);
-      expect(result).toHaveLength(2);
-    });
-
-    it('keeps crimes with different locations', () => {
-      const crimes = [
-        { category: 'theft', lat: 51.5, lon: -0.1, month: '2025-01', location: 'A' },
-        { category: 'theft', lat: 51.6, lon: -0.2, month: '2025-01', location: 'B' },
-      ];
-      expect(deduplicateCrimes(crimes)).toHaveLength(2);
-    });
-
-    it('returns empty array for empty input', () => {
-      expect(deduplicateCrimes([])).toEqual([]);
-    });
-  });
-
-  describe('fetchCrimesInTiles', () => {
-    it('fetches crimes from multiple tiles and merges results', async () => {
-      const mockCrimes1 = [
-        { category: 'theft', location: { latitude: '51.5', longitude: '-0.1', street: { name: 'A St' } }, month: '2025-01' },
-      ];
-      const mockCrimes2 = [
-        { category: 'burglary', location: { latitude: '51.6', longitude: '-0.2', street: { name: 'B St' } }, month: '2025-01' },
-      ];
-
-      vi.stubGlobal('fetch', vi.fn()
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockCrimes1) })
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockCrimes2) }));
-
-      const tiles = [
-        { minLat: 51.4, maxLat: 51.5, minLon: -0.2, maxLon: -0.1 },
-        { minLat: 51.5, maxLat: 51.6, minLon: -0.2, maxLon: -0.1 },
-      ];
-
-      const result = await fetchCrimesInTiles(tiles, 5);
-      expect(result).toHaveLength(2);
-      const categories = result.map((c) => c.category).sort();
-      expect(categories).toEqual(['burglary', 'theft']);
-    });
-
-    it('skips tiles that return errors', async () => {
-      vi.stubGlobal('fetch', vi.fn()
-        .mockResolvedValueOnce({ ok: false, status: 503 })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve([
-            { category: 'theft', location: { latitude: '51.5', longitude: '-0.1', street: {} }, month: '' },
-          ]),
-        }));
-
-      const tiles = [
-        { minLat: 51.4, maxLat: 51.5, minLon: -0.2, maxLon: -0.1 },
-        { minLat: 51.5, maxLat: 51.6, minLon: -0.2, maxLon: -0.1 },
-      ];
-
-      const result = await fetchCrimesInTiles(tiles, 5);
-      expect(result).toHaveLength(1);
-    });
-
-    it('filters out crimes with invalid coordinates', async () => {
+  describe('locateNeighbourhood', () => {
+    it('returns force and neighbourhood on success', async () => {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve([
-          { category: 'theft', location: { latitude: '51.5', longitude: '-0.1', street: {} }, month: '' },
-          { category: 'theft', location: { latitude: 'NaN', longitude: 'NaN', street: {} }, month: '' },
-        ]),
+        json: () => Promise.resolve({ force: 'metropolitan', neighbourhood: '00BK17N' }),
       }));
+      const result = await locateNeighbourhood(51.5, -0.1);
+      expect(result).toEqual({ force: 'metropolitan', neighbourhood: '00BK17N' });
+      expect(fetch).toHaveBeenCalledWith(expect.stringContaining('locate-neighbourhood?q=51.5,-0.1'));
+    });
 
-      const tiles = [{ minLat: 51.4, maxLat: 51.5, minLon: -0.2, maxLon: -0.1 }];
-      const result = await fetchCrimesInTiles(tiles, 5);
+    it('returns null on 404', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
+      expect(await locateNeighbourhood(55.0, -3.0)).toBeNull();
+    });
+
+    it('returns null on network error', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
+      expect(await locateNeighbourhood(51.5, -0.1)).toBeNull();
+    });
+  });
+
+  describe('discoverNeighbourhoods', () => {
+    it('discovers and deduplicates neighbourhoods from sample points', async () => {
+      vi.stubGlobal('fetch', vi.fn()
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ force: 'met', neighbourhood: 'A' }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ force: 'met', neighbourhood: 'B' }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ force: 'met', neighbourhood: 'A' }) }));
+
+      const points = [{ lat: 51.5, lon: -0.1 }, { lat: 51.6, lon: -0.2 }, { lat: 51.5, lon: -0.1 }];
+      const result = await discoverNeighbourhoods(points, 5);
+
+      expect(result).toHaveLength(2);
+      expect(result[0].id).toBe('A');
+      expect(result[1].id).toBe('B');
+      expect(result[0].force).toBe('met');
+    });
+
+    it('skips points that return null', async () => {
+      vi.stubGlobal('fetch', vi.fn()
+        .mockResolvedValueOnce({ ok: false, status: 404 })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ force: 'met', neighbourhood: 'X' }) }));
+
+      const points = [{ lat: 55.0, lon: -3.0 }, { lat: 51.5, lon: -0.1 }];
+      const result = await discoverNeighbourhoods(points, 5);
       expect(result).toHaveLength(1);
     });
 
-    it('respects concurrency limit', async () => {
-      let maxConcurrent = 0;
-      let inFlight = 0;
+    it('returns empty array when all points fail', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
+      const points = [{ lat: 55.0, lon: -3.0 }];
+      expect(await discoverNeighbourhoods(points, 5)).toEqual([]);
+    });
+  });
 
-      vi.stubGlobal('fetch', vi.fn().mockImplementation(() => {
-        inFlight++;
-        maxConcurrent = Math.max(maxConcurrent, inFlight);
-        return new Promise((resolve) => {
-          setTimeout(() => {
-            inFlight--;
-            resolve({ ok: true, json: () => Promise.resolve([]) });
-          }, 10);
+  describe('enrichNeighbourhoods', () => {
+    it('fetches boundary and name for each neighbourhood', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockImplementation((url) => {
+        if (url.includes('/boundary')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve([
+              { latitude: '51.5', longitude: '-0.1' },
+              { latitude: '51.6', longitude: '-0.2' },
+              { latitude: '51.5', longitude: '-0.3' },
+            ]),
+          });
+        }
+        // Details endpoint
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ name: 'Test Ward' }),
         });
       }));
 
-      const tiles = Array.from({ length: 10 }, (_, i) => ({
-        minLat: 51.0 + i * 0.05, maxLat: 51.05 + i * 0.05,
-        minLon: -0.2, maxLon: -0.1,
-      }));
+      const neighbourhoods = [{ id: 'A', force: 'met', name: '', boundary: [], crimeCount: 0, categories: {}, density: 'low' }];
+      await enrichNeighbourhoods(neighbourhoods, 5);
 
-      await fetchCrimesInTiles(tiles, 3);
-      expect(maxConcurrent).toBeLessThanOrEqual(3);
+      expect(neighbourhoods[0].name).toBe('Test Ward');
+      expect(neighbourhoods[0].boundary).toHaveLength(3);
+      expect(neighbourhoods[0].boundary[0]).toEqual([51.5, -0.1]);
+    });
+
+    it('leaves boundary empty on error', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
+
+      const neighbourhoods = [{ id: 'X', force: 'met', name: '', boundary: [], crimeCount: 0, categories: {}, density: 'low' }];
+      await enrichNeighbourhoods(neighbourhoods, 5);
+
+      expect(neighbourhoods[0].boundary).toEqual([]);
+      expect(neighbourhoods[0].name).toBe('');
     });
   });
 
-  describe('aggregateCrimes', () => {
-    it('groups crimes by grid cell', () => {
-      const crimes = [
-        { category: 'burglary', lat: 51.500, lon: -0.100 },
-        { category: 'burglary', lat: 51.500, lon: -0.100 },
-        { category: 'theft', lat: 51.510, lon: -0.110 },
-      ];
-      const grid = aggregateCrimes(crimes);
-      expect(grid.length).toBeGreaterThanOrEqual(1);
-      const totalCount = grid.reduce((sum, cell) => sum + cell.count, 0);
-      expect(totalCount).toBe(3);
+  describe('fetchAllNeighbourhoodCrimes', () => {
+    it('fetches and counts crimes per neighbourhood', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve([
+          { category: 'burglary' },
+          { category: 'burglary' },
+          { category: 'theft' },
+        ]),
+      }));
+
+      const neighbourhoods = [{
+        id: 'A', force: 'met', name: 'Test', crimeCount: 0, categories: {},
+        boundary: [[51.5, -0.1], [51.6, -0.2], [51.5, -0.3]],
+        density: 'low',
+      }];
+      await fetchAllNeighbourhoodCrimes(neighbourhoods, 5);
+
+      expect(neighbourhoods[0].crimeCount).toBe(3);
+      expect(neighbourhoods[0].categories.burglary).toBe(2);
+      expect(neighbourhoods[0].categories.theft).toBe(1);
     });
 
-    it('returns empty array for no crimes', () => {
-      expect(aggregateCrimes([])).toEqual([]);
+    it('sends POST with neighbourhood boundary as poly', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve([]),
+      }));
+
+      const neighbourhoods = [{
+        id: 'A', force: 'met', name: 'Test', crimeCount: 0, categories: {},
+        boundary: [[51.5, -0.1], [51.6, -0.2], [51.5, -0.3]],
+        density: 'low',
+      }];
+      await fetchAllNeighbourhoodCrimes(neighbourhoods, 5);
+
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining('crimes-street/all-crime'),
+        expect.objectContaining({ method: 'POST' })
+      );
     });
 
-    it('tracks category counts per cell', () => {
-      const crimes = [
-        { category: 'burglary', lat: 51.500, lon: -0.100 },
-        { category: 'burglary', lat: 51.500, lon: -0.100 },
-        { category: 'theft', lat: 51.500, lon: -0.100 },
-      ];
-      const grid = aggregateCrimes(crimes);
-      const cell = grid[0];
-      expect(cell.categories.burglary).toBe(2);
-      expect(cell.categories.theft).toBe(1);
+    it('skips neighbourhoods with no boundary', async () => {
+      vi.stubGlobal('fetch', vi.fn());
+      const neighbourhoods = [{
+        id: 'A', force: 'met', name: '', crimeCount: 0, categories: {},
+        boundary: [],
+        density: 'low',
+      }];
+      await fetchAllNeighbourhoodCrimes(neighbourhoods, 5);
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('handles API errors gracefully', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503 }));
+      const neighbourhoods = [{
+        id: 'A', force: 'met', name: '', crimeCount: 0, categories: {},
+        boundary: [[51.5, -0.1], [51.6, -0.2], [51.5, -0.3]],
+        density: 'low',
+      }];
+      await fetchAllNeighbourhoodCrimes(neighbourhoods, 5);
+      expect(neighbourhoods[0].crimeCount).toBe(0);
     });
   });
 
@@ -296,60 +310,41 @@ describe('crimeData', () => {
       await expect(fetchCrimeData({ geojson: { features: [] } })).rejects.toThrow('Isochrone GeoJSON is required');
     });
 
-    it('fetches crime data using tile-based approach', async () => {
-      const mockCrimes = [
-        {
-          category: 'burglary',
-          location: { latitude: '51.5', longitude: '-0.1', street: { name: 'High Street' } },
-          month: '2025-01',
-        },
-      ];
-
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve(mockCrimes),
-      }));
-
-      const geojson = {
-        features: [{
-          properties: { value: 1800 },
-          geometry: {
-            type: 'Polygon',
-            coordinates: [[[-0.12, 51.49], [-0.08, 51.51], [-0.10, 51.50], [-0.12, 51.49]]],
-          },
-        }],
-      };
-
-      const result = await fetchCrimeData({ geojson });
-
-      // Should have made at least one fetch call
-      expect(fetch).toHaveBeenCalled();
-      const [url, opts] = fetch.mock.calls[0];
-      expect(url).toContain('data.police.uk');
-      expect(opts.method).toBe('POST');
-      expect(opts.body).toMatch(/^poly=/);
-
-      expect(result.length).toBeGreaterThanOrEqual(1);
-      expect(result[0]).toMatchObject({
-        category: 'burglary',
-        lat: 51.5,
-        lon: -0.1,
-        month: '2025-01',
-        location: 'High Street',
+    it('returns neighbourhood-level crime data', async () => {
+      // Mock: locate-neighbourhood, then boundary, details, then crimes
+      const fetchMock = vi.fn().mockImplementation((url) => {
+        if (url.includes('locate-neighbourhood')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ force: 'met', neighbourhood: 'W1' }),
+          });
+        }
+        if (url.includes('/boundary')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve([
+              { latitude: '51.5', longitude: '-0.1' },
+              { latitude: '51.6', longitude: '-0.1' },
+              { latitude: '51.6', longitude: '-0.2' },
+            ]),
+          });
+        }
+        if (url.includes('crimes-street/all-crime')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve([
+              { category: 'burglary' },
+              { category: 'theft' },
+            ]),
+          });
+        }
+        // Details endpoint
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ name: 'Westminster' }),
+        });
       });
-    });
-
-    it('deduplicates crimes across tiles', async () => {
-      const sameCrime = {
-        category: 'burglary',
-        location: { latitude: '51.5', longitude: '-0.1', street: { name: 'A St' } },
-        month: '2025-01',
-      };
-
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve([sameCrime]),
-      }));
+      vi.stubGlobal('fetch', fetchMock);
 
       const geojson = {
         features: [{
@@ -361,40 +356,36 @@ describe('crimeData', () => {
         }],
       };
 
-      const result = await fetchCrimeData({ geojson });
-      // Even if multiple tiles return the same crime, it should appear only once
-      const matching = result.filter((c) => c.category === 'burglary' && c.lat === 51.5 && c.lon === -0.1);
-      expect(matching).toHaveLength(1);
+      const { neighbourhoods, totalCrimes } = await fetchCrimeData({ geojson });
+
+      expect(neighbourhoods.length).toBeGreaterThanOrEqual(1);
+      expect(totalCrimes).toBeGreaterThanOrEqual(1);
+
+      const n = neighbourhoods[0];
+      expect(n.name).toBe('Westminster');
+      expect(n.crimeCount).toBe(2);
+      expect(n.categories.burglary).toBe(1);
+      expect(n.categories.theft).toBe(1);
+      expect(n.boundary.length).toBe(3);
+      expect(['low', 'medium', 'high', 'very-high']).toContain(n.density);
     });
 
-    it('handles tile failures gracefully without throwing', async () => {
-      let callNum = 0;
-      vi.stubGlobal('fetch', vi.fn().mockImplementation(() => {
-        callNum++;
-        if (callNum === 1) {
-          return Promise.resolve({ ok: false, status: 503 });
-        }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve([
-            { category: 'theft', location: { latitude: '51.5', longitude: '-0.1', street: {} }, month: '2025-01' },
-          ]),
-        });
-      }));
+    it('returns empty result when no neighbourhoods found', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
 
       const geojson = {
         features: [{
-          properties: { value: 3600 },
+          properties: { value: 600 },
           geometry: {
             type: 'Polygon',
-            coordinates: [[[-0.15, 51.45], [-0.05, 51.55], [-0.10, 51.50], [-0.15, 51.45]]],
+            coordinates: [[[-0.12, 51.49], [-0.08, 51.51], [-0.10, 51.50], [-0.12, 51.49]]],
           },
         }],
       };
 
-      // Should NOT throw — gracefully degrades by skipping failed tiles
-      const result = await fetchCrimeData({ geojson });
-      expect(Array.isArray(result)).toBe(true);
+      const { neighbourhoods, totalCrimes } = await fetchCrimeData({ geojson });
+      expect(neighbourhoods).toEqual([]);
+      expect(totalCrimes).toBe(0);
     });
   });
 });

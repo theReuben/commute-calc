@@ -1,18 +1,22 @@
 import { POLICE_API_URL } from './config.js';
 
-/** Tile size in degrees (~5.5km at UK latitudes). */
-const TILE_SIZE = 0.05;
-
 /** Maximum concurrent Police API requests. */
 const MAX_CONCURRENT = 5;
 
+/** Spacing between sample points in degrees (~8.8km at UK latitudes). */
+const SAMPLE_SPACING = 0.08;
+
 /**
- * Fetch street-level crime data from the UK Police API within an isochrone area.
- * Splits the area into small rectangular tiles to avoid the API's area-size limit.
+ * Fetch crime data grouped by police neighbourhood within an isochrone area.
+ *
+ * 1. Samples points inside the isochrone bounding box
+ * 2. Discovers which police neighbourhoods they belong to
+ * 3. Fetches each neighbourhood's boundary, name, and crime data
+ * 4. Classifies each neighbourhood's crime density
  *
  * @param {Object} params
  * @param {Object} params.geojson - GeoJSON FeatureCollection (isochrone result).
- * @returns {Promise<Array<{category: string, lat: number, lon: number, month: string, location: string}>>}
+ * @returns {Promise<{neighbourhoods: Array, totalCrimes: number}>}
  */
 export async function fetchCrimeData({ geojson }) {
   if (!geojson || !geojson.features || geojson.features.length === 0) {
@@ -29,14 +33,35 @@ export async function fetchCrimeData({ geojson }) {
     throw new Error('Could not extract coordinates from isochrone polygon');
   }
 
-  const tiles = createTiles(bbox, TILE_SIZE);
-  const allCrimes = await fetchCrimesInTiles(tiles, MAX_CONCURRENT);
-  return deduplicateCrimes(allCrimes);
+  // 1. Sample points across the area and discover neighbourhoods
+  const samplePoints = createSampleGrid(bbox, SAMPLE_SPACING);
+  const neighbourhoods = await discoverNeighbourhoods(samplePoints, MAX_CONCURRENT);
+
+  if (neighbourhoods.length === 0) {
+    return { neighbourhoods: [], totalCrimes: 0 };
+  }
+
+  // 2. Fetch boundary + name for each neighbourhood
+  await enrichNeighbourhoods(neighbourhoods, MAX_CONCURRENT);
+
+  // 3. Remove any without a valid boundary
+  const valid = neighbourhoods.filter((n) => n.boundary.length >= 3);
+
+  // 4. Fetch crimes per neighbourhood
+  await fetchAllNeighbourhoodCrimes(valid, MAX_CONCURRENT);
+
+  // 5. Classify density relative to the group
+  const maxCount = valid.reduce((max, n) => Math.max(max, n.crimeCount), 0);
+  valid.forEach((n) => {
+    n.density = classifyCrimeDensity(n.crimeCount, maxCount);
+  });
+
+  const totalCrimes = valid.reduce((sum, n) => sum + n.crimeCount, 0);
+  return { neighbourhoods: valid, totalCrimes };
 }
 
 /**
  * Get the outermost (largest area) feature from an isochrone FeatureCollection.
- * The outermost isochrone has the highest time value.
  * @param {Object} geojson
  * @returns {Object|null} GeoJSON Feature
  */
@@ -52,7 +77,7 @@ export function getOuterFeature(geojson) {
 
 /**
  * Compute the bounding box of a GeoJSON Polygon or MultiPolygon feature.
- * @param {Object} feature - GeoJSON Feature.
+ * @param {Object} feature
  * @returns {{minLat: number, maxLat: number, minLon: number, maxLon: number}|null}
  */
 export function getBoundingBox(feature) {
@@ -87,147 +112,142 @@ export function getBoundingBox(feature) {
 }
 
 /**
- * Split a bounding box into rectangular tiles of a given size.
- * Each tile is a small bbox suitable for a single Police API request.
+ * Create a grid of sample points covering a bounding box.
  * @param {{minLat: number, maxLat: number, minLon: number, maxLon: number}} bbox
- * @param {number} size - Tile size in degrees.
- * @returns {Array<{minLat: number, maxLat: number, minLon: number, maxLon: number}>}
+ * @param {number} spacing - Grid spacing in degrees.
+ * @returns {Array<{lat: number, lon: number}>}
  */
-export function createTiles(bbox, size) {
-  const tiles = [];
-  for (let lat = bbox.minLat; lat < bbox.maxLat; lat += size) {
-    for (let lon = bbox.minLon; lon < bbox.maxLon; lon += size) {
-      tiles.push({
-        minLat: lat,
-        maxLat: Math.min(lat + size, bbox.maxLat),
-        minLon: lon,
-        maxLon: Math.min(lon + size, bbox.maxLon),
-      });
+export function createSampleGrid(bbox, spacing) {
+  const points = [];
+  for (let lat = bbox.minLat; lat <= bbox.maxLat; lat += spacing) {
+    for (let lon = bbox.minLon; lon <= bbox.maxLon; lon += spacing) {
+      points.push({ lat, lon });
     }
   }
-  return tiles;
+  return points;
 }
 
 /**
- * Convert a tile bounding box to a Police API polygon string.
- * @param {{minLat: number, maxLat: number, minLon: number, maxLon: number}} tile
- * @returns {string} Polygon string in "lat,lon:lat,lon:..." format.
+ * Look up the police neighbourhood for a single lat/lon point.
+ * Returns null if the point is outside England/Wales or on error.
+ * @param {number} lat
+ * @param {number} lon
+ * @returns {Promise<{force: string, neighbourhood: string}|null>}
  */
-export function tileToPolyString(tile) {
-  return [
-    `${tile.minLat},${tile.minLon}`,
-    `${tile.maxLat},${tile.minLon}`,
-    `${tile.maxLat},${tile.maxLon}`,
-    `${tile.minLat},${tile.maxLon}`,
-  ].join(':');
-}
-
-/**
- * Fetch crime data for a single tile polygon.
- * Returns an empty array if the request fails (graceful degradation).
- * @param {string} polyString - Police API polygon string.
- * @returns {Promise<Array>} Raw crime objects from the API.
- */
-async function fetchSingleTile(polyString) {
-  const response = await fetch(`${POLICE_API_URL}/crimes-street/all-crime`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ poly: polyString }).toString(),
-  });
-
-  if (!response.ok) {
-    // Gracefully skip tiles that fail (e.g. 503 for area still too large, or no data)
-    return [];
+export async function locateNeighbourhood(lat, lon) {
+  try {
+    const response = await fetch(`${POLICE_API_URL}/locate-neighbourhood?q=${lat},${lon}`);
+    if (!response.ok) return null;
+    return response.json();
+  } catch {
+    return null;
   }
-
-  return response.json();
 }
 
 /**
- * Fetch crimes across all tiles with a concurrency limit.
- * @param {Array} tiles - Array of tile bounding boxes.
- * @param {number} maxConcurrent - Maximum parallel requests.
- * @returns {Promise<Array<{category: string, lat: number, lon: number, month: string, location: string}>>}
+ * Discover unique police neighbourhoods by sampling points.
+ * @param {Array<{lat: number, lon: number}>} points
+ * @param {number} maxConcurrent
+ * @returns {Promise<Array<{id: string, force: string, name: string, boundary: Array, crimeCount: number, categories: Object, density: string}>>}
  */
-export async function fetchCrimesInTiles(tiles, maxConcurrent) {
+export async function discoverNeighbourhoods(points, maxConcurrent) {
   const results = [];
 
-  for (let i = 0; i < tiles.length; i += maxConcurrent) {
-    const batch = tiles.slice(i, i + maxConcurrent);
+  for (let i = 0; i < points.length; i += maxConcurrent) {
+    const batch = points.slice(i, i + maxConcurrent);
     const batchResults = await Promise.all(
-      batch.map((tile) => fetchSingleTile(tileToPolyString(tile)))
+      batch.map((p) => locateNeighbourhood(p.lat, p.lon))
     );
-
-    for (const crimes of batchResults) {
-      for (const crime of crimes) {
-        const lat = parseFloat(crime.location?.latitude);
-        const lon = parseFloat(crime.location?.longitude);
-        if (isNaN(lat) || isNaN(lon)) continue;
-
-        results.push({
-          category: crime.category || 'unknown',
-          lat,
-          lon,
-          month: crime.month || '',
-          location: crime.location?.street?.name || '',
-        });
-      }
-    }
+    results.push(...batchResults.filter(Boolean));
   }
 
-  return results;
-}
-
-/**
- * Remove duplicate crime records that appear in overlapping tiles.
- * Deduplicates by category + lat + lon + month.
- * @param {Array} crimes
- * @returns {Array}
- */
-export function deduplicateCrimes(crimes) {
-  const seen = new Set();
-  return crimes.filter((crime) => {
-    const key = `${crime.category}|${crime.lat}|${crime.lon}|${crime.month}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-/**
- * Aggregate crimes into a grid for heatmap-style display.
- * Groups crimes by rounded lat/lon into grid cells and returns counts.
- *
- * @param {Array<{category: string, lat: number, lon: number}>} crimes
- * @param {number} [precision=3] - Decimal places for grid rounding (3 ≈ 110m cells).
- * @returns {Array<{lat: number, lon: number, count: number, categories: Object}>}
- */
-export function aggregateCrimes(crimes, precision = 3) {
-  const grid = new Map();
-  const factor = Math.pow(10, precision);
-
-  crimes.forEach((crime) => {
-    const key = `${Math.round(crime.lat * factor)}:${Math.round(crime.lon * factor)}`;
-    if (!grid.has(key)) {
-      grid.set(key, {
-        lat: Math.round(crime.lat * factor) / factor,
-        lon: Math.round(crime.lon * factor) / factor,
-        count: 0,
-        categories: {},
-      });
-    }
-    const cell = grid.get(key);
-    cell.count++;
-    cell.categories[crime.category] = (cell.categories[crime.category] || 0) + 1;
+  // Deduplicate by force + neighbourhood ID
+  const seen = new Map();
+  results.forEach((r) => {
+    const key = `${r.force}:${r.neighbourhood}`;
+    if (!seen.has(key)) seen.set(key, r);
   });
 
-  return Array.from(grid.values());
+  return Array.from(seen.values()).map(({ force, neighbourhood }) => ({
+    id: neighbourhood,
+    force,
+    name: '',
+    boundary: [],
+    crimeCount: 0,
+    categories: {},
+    density: 'low',
+  }));
 }
 
 /**
- * Classify a grid cell's crime density for visual display.
- * @param {number} count - Number of crimes in the cell.
- * @param {number} maxCount - Maximum count across all cells.
+ * Fetch boundary polygon and name for each neighbourhood.
+ * @param {Array} neighbourhoods
+ * @param {number} maxConcurrent
+ */
+export async function enrichNeighbourhoods(neighbourhoods, maxConcurrent) {
+  for (let i = 0; i < neighbourhoods.length; i += maxConcurrent) {
+    const batch = neighbourhoods.slice(i, i + maxConcurrent);
+    await Promise.all(batch.map(async (n) => {
+      try {
+        const [boundaryRes, detailRes] = await Promise.all([
+          fetch(`${POLICE_API_URL}/${n.force}/${n.id}/boundary`),
+          fetch(`${POLICE_API_URL}/${n.force}/${n.id}`),
+        ]);
+
+        if (boundaryRes.ok) {
+          const points = await boundaryRes.json();
+          n.boundary = points.map((p) => [parseFloat(p.latitude), parseFloat(p.longitude)]);
+        }
+
+        if (detailRes.ok) {
+          const data = await detailRes.json();
+          n.name = data.name || '';
+        }
+      } catch {
+        // Skip neighbourhoods that fail
+      }
+    }));
+  }
+}
+
+/**
+ * Fetch street-level crimes within each neighbourhood's boundary.
+ * @param {Array} neighbourhoods - Must already have boundary populated.
+ * @param {number} maxConcurrent
+ */
+export async function fetchAllNeighbourhoodCrimes(neighbourhoods, maxConcurrent) {
+  for (let i = 0; i < neighbourhoods.length; i += maxConcurrent) {
+    const batch = neighbourhoods.slice(i, i + maxConcurrent);
+    await Promise.all(batch.map(async (n) => {
+      if (n.boundary.length < 3) return;
+
+      const polyString = n.boundary.map(([lat, lon]) => `${lat},${lon}`).join(':');
+      try {
+        const response = await fetch(`${POLICE_API_URL}/crimes-street/all-crime`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ poly: polyString }).toString(),
+        });
+
+        if (!response.ok) return;
+
+        const crimes = await response.json();
+        n.crimeCount = crimes.length;
+        crimes.forEach((crime) => {
+          const cat = crime.category || 'unknown';
+          n.categories[cat] = (n.categories[cat] || 0) + 1;
+        });
+      } catch {
+        // Skip on error — crimeCount stays 0
+      }
+    }));
+  }
+}
+
+/**
+ * Classify a neighbourhood's crime density for visual display.
+ * @param {number} count - Number of crimes.
+ * @param {number} maxCount - Maximum count across all neighbourhoods.
  * @returns {'low'|'medium'|'high'|'very-high'}
  */
 export function classifyCrimeDensity(count, maxCount) {
