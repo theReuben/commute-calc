@@ -3,6 +3,9 @@ import { POLICE_API_URL } from './config.js';
 /** Tile size in degrees (~5.5km at UK latitudes). */
 const TILE_SIZE = 0.05;
 
+/** Minimum tile size before giving up on subdivision (≈550m). */
+const MIN_TILE_SIZE = 0.005;
+
 /** Maximum concurrent Police API requests. */
 const MAX_CONCURRENT = 5;
 
@@ -123,20 +126,49 @@ export function tileToPolyString(tile) {
 }
 
 /**
+ * Split a single tile into 4 equal sub-tiles.
+ * @param {{minLat: number, maxLat: number, minLon: number, maxLon: number}} tile
+ * @returns {Array<{minLat: number, maxLat: number, minLon: number, maxLon: number}>}
+ */
+export function subdivideTile(tile) {
+  const midLat = (tile.minLat + tile.maxLat) / 2;
+  const midLon = (tile.minLon + tile.maxLon) / 2;
+  return [
+    { minLat: tile.minLat, maxLat: midLat, minLon: tile.minLon, maxLon: midLon },
+    { minLat: tile.minLat, maxLat: midLat, minLon: midLon, maxLon: tile.maxLon },
+    { minLat: midLat, maxLat: tile.maxLat, minLon: tile.minLon, maxLon: midLon },
+    { minLat: midLat, maxLat: tile.maxLat, minLon: midLon, maxLon: tile.maxLon },
+  ];
+}
+
+/**
  * Fetch crime data for a single tile polygon.
- * Returns an empty array if the request fails (graceful degradation).
- * @param {string} polyString - Police API polygon string.
+ * On 503 (area too large), subdivides into smaller tiles and retries.
+ * Returns an empty array if the request ultimately fails (graceful degradation).
+ * @param {{minLat: number, maxLat: number, minLon: number, maxLon: number}} tile
  * @returns {Promise<Array>} Raw crime objects from the API.
  */
-async function fetchSingleTile(polyString) {
+async function fetchSingleTile(tile) {
+  const polyString = tileToPolyString(tile);
   const response = await fetch(`${POLICE_API_URL}/crimes-street/all-crime`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ poly: polyString }).toString(),
   });
 
+  if (response.status === 503) {
+    // Area too large — subdivide and retry if tile is still splittable
+    const tileWidth = tile.maxLon - tile.minLon;
+    const tileHeight = tile.maxLat - tile.minLat;
+    if (tileWidth > MIN_TILE_SIZE || tileHeight > MIN_TILE_SIZE) {
+      const subTiles = subdivideTile(tile);
+      const subResults = await Promise.all(subTiles.map(fetchSingleTile));
+      return subResults.flat();
+    }
+    return [];
+  }
+
   if (!response.ok) {
-    // Gracefully skip tiles that fail (e.g. 503 for area still too large, or no data)
     return [];
   }
 
@@ -145,6 +177,7 @@ async function fetchSingleTile(polyString) {
 
 /**
  * Fetch crimes across all tiles with a concurrency limit.
+ * Tiles that return 503 are automatically subdivided and retried.
  * @param {Array} tiles - Array of tile bounding boxes.
  * @param {number} maxConcurrent - Maximum parallel requests.
  * @returns {Promise<Array<{category: string, lat: number, lon: number, month: string, location: string}>>}
@@ -155,7 +188,7 @@ export async function fetchCrimesInTiles(tiles, maxConcurrent) {
   for (let i = 0; i < tiles.length; i += maxConcurrent) {
     const batch = tiles.slice(i, i + maxConcurrent);
     const batchResults = await Promise.all(
-      batch.map((tile) => fetchSingleTile(tileToPolyString(tile)))
+      batch.map((tile) => fetchSingleTile(tile))
     );
 
     for (const crimes of batchResults) {

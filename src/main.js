@@ -2,6 +2,8 @@ import { createMap } from './map.js';
 import { geocodeAddress } from './geocode.js';
 import { fetchIsochrones } from './isochrone.js';
 import { fetchCrimeData, aggregateCrimes, classifyCrimeDensity, getGridPrecision, CRIME_COLORS } from './crimeData.js';
+import { buildLiveabilityGrid, classifyLiveability } from './liveability.js';
+import { LIVEABILITY_COLORS } from './config.js';
 import {
   showStatus,
   hideStatus,
@@ -14,11 +16,14 @@ import {
   showSearchResults,
   hideSearchResults,
   isCrimeOverlayEnabled,
-  setupCrimeOverlayToggle,
+  getOverlayMode,
+  setupOverlayModeButtons,
   showCrimeStatus,
   hideCrimeStatus,
   showCrimeLegend,
   hideCrimeLegend,
+  showLiveabilityLegend,
+  hideLiveabilityLegend,
 } from './ui.js';
 
 /**
@@ -154,7 +159,30 @@ export function initApp() {
   }
 
   /**
-   * Load crime data and display the overlay on the map.
+   * Render the liveability heatmap from isochrone GeoJSON and raw crimes.
+   */
+  function renderLiveabilityOverlay() {
+    if (!lastGeojson || !lastRawCrimes) return;
+
+    const zoom = mapInstance.getZoom();
+    const precision = zoom <= 10 ? 1 : zoom <= 12 ? 2 : 3;
+    const grid = buildLiveabilityGrid({
+      geojson: lastGeojson,
+      crimes: lastRawCrimes,
+      precision,
+    });
+
+    const cellSize = 1 / Math.pow(10, precision);
+    const gridWithLevels = grid.map((cell) => ({
+      ...cell,
+      level: classifyLiveability(cell.score),
+    }));
+
+    mapInstance.showLiveabilityOverlay(gridWithLevels, LIVEABILITY_COLORS, cellSize);
+  }
+
+  /**
+   * Load crime data and display the appropriate overlay on the map.
    * @param {Object} geojson - Isochrone GeoJSON FeatureCollection.
    */
   async function loadCrimeOverlay(geojson) {
@@ -163,15 +191,22 @@ export function initApp() {
       const crimes = await fetchCrimeData({ geojson });
       lastRawCrimes = crimes;
 
-      renderCrimeOverlay(crimes);
+      const mode = getOverlayMode();
+      if (mode === 'crime') {
+        renderCrimeOverlay(crimes);
+        if (crimes.length > 0) {
+          showCrimeLegend(CRIME_COLORS);
+          mapInstance.showCrimeMapLegend(CRIME_COLORS);
+        }
+      } else if (mode === 'liveability') {
+        renderLiveabilityOverlay();
+        showLiveabilityLegend(LIVEABILITY_COLORS);
+        mapInstance.showLiveabilityMapLegend(LIVEABILITY_COLORS);
+      }
 
       if (crimes.length > 0) {
-        showCrimeLegend(CRIME_COLORS);
-        mapInstance.showCrimeMapLegend(CRIME_COLORS);
         showCrimeStatus(`${crimes.length} crime${crimes.length !== 1 ? 's' : ''} reported in commute area`);
       } else {
-        hideCrimeLegend();
-        mapInstance.clearCrimeMapLegend();
         showCrimeStatus('No recent crime data available for this area');
       }
     } catch (err) {
@@ -179,23 +214,60 @@ export function initApp() {
     }
   }
 
-  // Re-aggregate crime data when zoom level changes
+  /**
+   * Clear all overlay layers and legends.
+   */
+  function clearAllOverlays() {
+    lastRawCrimes = null;
+    mapInstance.clearCrimeOverlay();
+    mapInstance.clearCrimeMapLegend();
+    mapInstance.clearLiveabilityOverlay();
+    mapInstance.clearLiveabilityMapLegend();
+    hideCrimeStatus();
+    hideCrimeLegend();
+    hideLiveabilityLegend();
+  }
+
+  // Re-aggregate overlays when zoom level changes
   mapInstance.onZoomEnd(() => {
-    if (lastRawCrimes && lastRawCrimes.length > 0 && isCrimeOverlayEnabled()) {
-      renderCrimeOverlay(lastRawCrimes);
+    const mode = getOverlayMode();
+    if (lastRawCrimes && lastRawCrimes.length > 0) {
+      if (mode === 'crime') {
+        renderCrimeOverlay(lastRawCrimes);
+      } else if (mode === 'liveability' && lastGeojson) {
+        renderLiveabilityOverlay();
+      }
     }
   });
 
-  // Crime overlay toggle
-  setupCrimeOverlayToggle((enabled) => {
-    if (enabled && lastGeojson) {
-      loadCrimeOverlay(lastGeojson);
-    } else {
-      lastRawCrimes = null;
-      mapInstance.clearCrimeOverlay();
-      mapInstance.clearCrimeMapLegend();
+  // Overlay mode selector
+  setupOverlayModeButtons((mode) => {
+    // Clear existing overlays first
+    mapInstance.clearCrimeOverlay();
+    mapInstance.clearCrimeMapLegend();
+    mapInstance.clearLiveabilityOverlay();
+    mapInstance.clearLiveabilityMapLegend();
+    hideCrimeLegend();
+    hideLiveabilityLegend();
+
+    if (mode === 'none') {
       hideCrimeStatus();
-      hideCrimeLegend();
+      return;
+    }
+
+    if (lastGeojson && lastRawCrimes) {
+      // Re-render with existing data
+      if (mode === 'crime') {
+        renderCrimeOverlay(lastRawCrimes);
+        showCrimeLegend(CRIME_COLORS);
+        mapInstance.showCrimeMapLegend(CRIME_COLORS);
+      } else if (mode === 'liveability') {
+        renderLiveabilityOverlay();
+        showLiveabilityLegend(LIVEABILITY_COLORS);
+        mapInstance.showLiveabilityMapLegend(LIVEABILITY_COLORS);
+      }
+    } else if (lastGeojson) {
+      loadCrimeOverlay(lastGeojson);
     }
   });
 }

@@ -252,6 +252,61 @@ body {
   margin-bottom: 6px;
 }
 
+.overlay-mode-selector {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.overlay-mode-btn {
+  flex: 1;
+  padding: 6px 8px;
+  border: 2px solid #dee2e6;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.overlay-mode-btn:hover {
+  border-color: #74c0fc;
+  background: #e7f5ff;
+}
+
+.overlay-mode-btn.active {
+  border-color: #228be6;
+  background: #e7f5ff;
+  font-weight: 600;
+}
+
+.liveability-map-legend {
+  background: white;
+  padding: 8px 10px;
+  border-radius: 6px;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.liveability-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.liveability-legend-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
 .crime-status {
   font-size: 0.75rem;
   color: #495057;

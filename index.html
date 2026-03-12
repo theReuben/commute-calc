@@ -93,14 +93,18 @@
       </div>
 
       <div id="crime-section" class="crime-section">
-        <h3>🔍 Area Safety</h3>
-        <label class="checkbox-label crime-overlay-toggle">
-          <input type="checkbox" id="crime-overlay" checked />
-          Show crime data on map
-        </label>
+        <h3>Area Insights</h3>
+        <div class="overlay-mode-selector" id="overlay-mode" role="group" aria-label="Overlay mode">
+          <button class="overlay-mode-btn" data-overlay="none">Off</button>
+          <button class="overlay-mode-btn" data-overlay="crime">Crime</button>
+          <button class="overlay-mode-btn active" data-overlay="liveability">Liveability</button>
+        </div>
         <div id="crime-status" class="crime-status" hidden></div>
         <div id="crime-legend" class="crime-legend" hidden>
           <div id="crime-legend-items"></div>
+        </div>
+        <div id="liveability-legend" class="crime-legend" hidden>
+          <div id="liveability-legend-items"></div>
         </div>
         <p class="hint">Crime data from <a href="https://data.police.uk" target="_blank" rel="noopener noreferrer">data.police.uk</a> (UK only, most recent month)</p>
       </div>

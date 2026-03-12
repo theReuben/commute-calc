@@ -151,21 +151,40 @@ export function hideSearchResults() {
  * @returns {boolean}
  */
 export function isCrimeOverlayEnabled() {
-  const el = document.getElementById('crime-overlay');
-  return el ? el.checked : false;
+  return getOverlayMode() === 'crime' || getOverlayMode() === 'liveability';
+}
+
+/**
+ * Get the currently selected overlay mode.
+ * @returns {'none'|'crime'|'liveability'}
+ */
+export function getOverlayMode() {
+  const active = document.querySelector('.overlay-mode-btn.active');
+  return active ? active.dataset.overlay : 'liveability';
+}
+
+/**
+ * Set up overlay mode button handlers.
+ * @param {function} onChange - Callback with (mode: string).
+ */
+export function setupOverlayModeButtons(onChange) {
+  const buttons = document.querySelectorAll('.overlay-mode-btn');
+  buttons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      buttons.forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (onChange) onChange(btn.dataset.overlay);
+    });
+  });
 }
 
 /**
  * Set up crime overlay toggle change handler.
  * @param {function} onChange - Callback with (enabled: boolean).
+ * @deprecated Use setupOverlayModeButtons instead.
  */
 export function setupCrimeOverlayToggle(onChange) {
-  const el = document.getElementById('crime-overlay');
-  if (el) {
-    el.addEventListener('change', () => {
-      if (onChange) onChange(el.checked);
-    });
-  }
+  // Kept for backwards compat; new code uses setupOverlayModeButtons
 }
 
 /**
@@ -218,5 +237,38 @@ export function showCrimeLegend(colorMap) {
  */
 export function hideCrimeLegend() {
   const legend = document.getElementById('crime-legend');
+  if (legend) legend.hidden = true;
+}
+
+/**
+ * Show the liveability legend with level colors.
+ * @param {Object} colorMap - Maps level names to {fillColor, label}.
+ */
+export function showLiveabilityLegend(colorMap) {
+  const container = document.getElementById('liveability-legend-items');
+  if (!container) return;
+
+  container.innerHTML = '';
+  ['excellent', 'good', 'fair', 'poor'].forEach((level) => {
+    const config = colorMap[level];
+    if (!config) return;
+    const item = document.createElement('div');
+    item.className = 'legend-item';
+    item.innerHTML = `
+      <span class="legend-color" style="background: ${config.fillColor}"></span>
+      <span>${config.label}</span>
+    `;
+    container.appendChild(item);
+  });
+
+  const legend = document.getElementById('liveability-legend');
+  if (legend) legend.hidden = false;
+}
+
+/**
+ * Hide the liveability legend.
+ */
+export function hideLiveabilityLegend() {
+  const legend = document.getElementById('liveability-legend');
   if (legend) legend.hidden = true;
 }
