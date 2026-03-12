@@ -138,44 +138,40 @@ export function createMap(elementId) {
   }
 
   /**
-   * Display crime density markers on the map.
-   * @param {Array<{lat: number, lon: number, count: number, density: string, categories: Object}>} gridCells
+   * Display crime data as neighbourhood polygons on the map.
+   * Each polygon is colored by its crime density level.
+   * @param {Array<{name: string, boundary: Array<[number,number]>, crimeCount: number, density: string, categories: Object}>} neighbourhoods
    * @param {Object} colorMap - Maps density levels to {fillColor, color}.
    */
-  function showCrimeOverlay(gridCells, colorMap) {
+  function showCrimeOverlay(neighbourhoods, colorMap) {
     clearCrimeOverlay();
 
-    gridCells.forEach((cell) => {
-      const colors = colorMap[cell.density] || { fillColor: '#adb5bd', color: '#495057' };
-      // Radius: base 4px, log-scaled by count (factor 3), capped at 16px
-      const radius = Math.min(4 + Math.log2(cell.count + 1) * 3, 16);
+    neighbourhoods.forEach((n) => {
+      if (!n.boundary || n.boundary.length < 3) return;
 
-      const marker = L.circleMarker([cell.lat, cell.lon], {
-        radius,
+      const colors = colorMap[n.density] || { fillColor: '#adb5bd', color: '#495057' };
+
+      const polygon = L.polygon(n.boundary, {
         fillColor: colors.fillColor,
         color: colors.color,
-        weight: 1.5,
+        weight: 2,
         opacity: 0.8,
-        fillOpacity: 0.55,
+        fillOpacity: 0.35,
       }).addTo(crimeLayer);
 
-      // Build category breakdown sorted by count
-      const sortedCategories = Object.entries(cell.categories)
-        .sort((a, b) => b[1] - a[1]);
-
-      // Tooltip on hover — compact summary with top crime type
-      const topCat = sortedCategories[0];
-      const tooltipText = topCat
-        ? `${cell.count} crime${cell.count !== 1 ? 's' : ''} — ${escapeHtml(formatCrimeCategory(topCat[0]))}`
-        : `${cell.count} crime${cell.count !== 1 ? 's' : ''}`;
-      marker.bindTooltip(tooltipText, { direction: 'top', offset: [0, -6] });
+      // Tooltip on hover — neighbourhood name and crime count
+      const label = n.name ? escapeHtml(n.name) : 'Unknown area';
+      const countText = `${n.crimeCount} crime${n.crimeCount !== 1 ? 's' : ''}`;
+      polygon.bindTooltip(`${label}: ${countText}`, { sticky: true });
 
       // Popup on click — full category breakdown
-      const allCategories = sortedCategories
-        .map(([cat, n]) => `${escapeHtml(formatCrimeCategory(cat))}: ${n}`)
+      const sortedCategories = Object.entries(n.categories)
+        .sort((a, b) => b[1] - a[1]);
+      const categoryHtml = sortedCategories
+        .map(([cat, count]) => `${escapeHtml(formatCrimeCategory(cat))}: ${count}`)
         .join('<br>');
-      marker.bindPopup(
-        `<strong>${cell.count} crime${cell.count !== 1 ? 's' : ''}</strong><br>${allCategories}`
+      polygon.bindPopup(
+        `<strong>${label}</strong><br>${countText}<br>${categoryHtml}`
       );
     });
   }

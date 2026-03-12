@@ -1,7 +1,7 @@
 import { createMap } from './map.js';
 import { geocodeAddress } from './geocode.js';
 import { fetchIsochrones } from './isochrone.js';
-import { fetchCrimeData, aggregateCrimes, classifyCrimeDensity, CRIME_COLORS } from './crimeData.js';
+import { fetchCrimeData, CRIME_COLORS } from './crimeData.js';
 import {
   showStatus,
   hideStatus,
@@ -142,21 +142,17 @@ export function initApp() {
   async function loadCrimeOverlay(geojson) {
     try {
       showCrimeStatus('Loading crime data...');
-      const crimes = await fetchCrimeData({ geojson });
-      const grid = aggregateCrimes(crimes);
-      const maxCount = grid.reduce((max, cell) => Math.max(max, cell.count), 0);
+      const { neighbourhoods, totalCrimes } = await fetchCrimeData({ geojson });
 
-      const gridWithDensity = grid.map((cell) => ({
-        ...cell,
-        density: classifyCrimeDensity(cell.count, maxCount),
-      }));
+      mapInstance.showCrimeOverlay(neighbourhoods, CRIME_COLORS);
 
-      mapInstance.showCrimeOverlay(gridWithDensity, CRIME_COLORS);
-
-      if (crimes.length > 0) {
+      if (totalCrimes > 0) {
         showCrimeLegend(CRIME_COLORS);
         mapInstance.showCrimeMapLegend(CRIME_COLORS);
-        showCrimeStatus(`${crimes.length} crime${crimes.length !== 1 ? 's' : ''} reported in commute area`);
+        const areaCount = neighbourhoods.length;
+        showCrimeStatus(
+          `${totalCrimes} crime${totalCrimes !== 1 ? 's' : ''} across ${areaCount} neighbourhood${areaCount !== 1 ? 's' : ''}`
+        );
       } else {
         hideCrimeLegend();
         mapInstance.clearCrimeMapLegend();
