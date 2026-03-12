@@ -15,7 +15,7 @@ export function createMap(elementId) {
   }).addTo(map);
 
   let workMarker = null;
-  let isochroneLayer = L.layerGroup().addTo(map);
+  let isochroneLayer = L.featureGroup().addTo(map);
   let crimeLayer = L.layerGroup().addTo(map);
   let crimeControl = null;
   let markerDragCallback = null;

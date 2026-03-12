@@ -44,9 +44,8 @@ vi.mock('leaflet', () => {
       }),
       tileLayer: vi.fn().mockReturnValue({ addTo: vi.fn() }),
       marker: vi.fn().mockReturnValue(mockMarker),
-      layerGroup: vi.fn()
-        .mockReturnValueOnce(mockLayerGroup)
-        .mockReturnValueOnce(mockCrimeLayerGroup),
+      featureGroup: vi.fn().mockReturnValue(mockLayerGroup),
+      layerGroup: vi.fn().mockReturnValue(mockCrimeLayerGroup),
       geoJSON: vi.fn().mockReturnValue({ addTo: vi.fn() }),
       circleMarker: vi.fn().mockReturnValue(mockCircleMarker),
       control: vi.fn().mockReturnValue(mockControl),
@@ -90,11 +89,8 @@ describe('map', () => {
     mockCircleMarker.bindPopup.mockReturnValue(mockCircleMarker);
     mockCircleMarker.bindTooltip.mockReturnValue(mockCircleMarker);
     mockControl.addTo.mockReturnValue(mockControl);
-
-    // layerGroup is called twice: once for isochrones, once for crime
-    L.layerGroup
-      .mockReturnValueOnce(mockLayerGroup)
-      .mockReturnValueOnce(mockCrimeLayerGroup);
+    L.featureGroup.mockReturnValue(mockLayerGroup);
+    L.layerGroup.mockReturnValue(mockCrimeLayerGroup);
 
     document.body.innerHTML = '<div id="map"></div>';
     mapInstance = createMap('map');
