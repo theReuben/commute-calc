@@ -231,6 +231,24 @@ export function createMap(elementId) {
       .replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
+  /**
+   * Get the current zoom level of the map.
+   * @returns {number}
+   */
+  function getZoom() {
+    return map.getZoom();
+  }
+
+  /**
+   * Register a callback for when the map zoom level changes.
+   * @param {function} callback - Called with the new zoom level after zooming ends.
+   */
+  function onZoomEnd(callback) {
+    map.on('zoomend', () => {
+      callback(map.getZoom());
+    });
+  }
+
   return {
     map,
     setWorkLocation,
@@ -243,5 +261,7 @@ export function createMap(elementId) {
     clearCrimeMapLegend,
     onMapClick,
     onMarkerDrag,
+    getZoom,
+    onZoomEnd,
   };
 }

@@ -239,6 +239,20 @@ export function classifyCrimeDensity(count, maxCount) {
   return 'very-high';
 }
 
+/**
+ * Map a Leaflet zoom level to an appropriate grid precision for crime aggregation.
+ * Lower zoom (zoomed out) uses coarser grids; higher zoom (zoomed in) uses finer grids.
+ *
+ * @param {number} zoom - Current map zoom level.
+ * @returns {number} Decimal places for grid rounding.
+ */
+export function getGridPrecision(zoom) {
+  if (zoom <= 10) return 1;  // ~11km cells
+  if (zoom <= 12) return 2;  // ~1.1km cells
+  if (zoom <= 14) return 3;  // ~110m cells
+  return 4;                   // ~11m cells
+}
+
 /** Color scheme for crime density levels. */
 export const CRIME_COLORS = {
   'low': { fillColor: '#2b8a3e', color: '#1b5e20', label: 'Low crime' },

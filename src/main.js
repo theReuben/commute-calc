@@ -1,7 +1,7 @@
 import { createMap } from './map.js';
 import { geocodeAddress } from './geocode.js';
 import { fetchIsochrones } from './isochrone.js';
-import { fetchCrimeData, aggregateCrimes, classifyCrimeDensity, CRIME_COLORS } from './crimeData.js';
+import { fetchCrimeData, aggregateCrimes, classifyCrimeDensity, getGridPrecision, CRIME_COLORS } from './crimeData.js';
 import {
   showStatus,
   hideStatus,
@@ -84,6 +84,7 @@ export function initApp() {
   // Calculate button
   const calculateBtn = document.getElementById('calculate-btn');
   let lastGeojson = null;
+  let lastRawCrimes = null;
 
   calculateBtn.addEventListener('click', async () => {
     const location = mapInstance.getWorkLocation();
@@ -136,6 +137,23 @@ export function initApp() {
   });
 
   /**
+   * Render the crime overlay from already-fetched raw crimes using the current zoom level.
+   * @param {Array} crimes - Raw crime records.
+   */
+  function renderCrimeOverlay(crimes) {
+    const precision = getGridPrecision(mapInstance.getZoom());
+    const grid = aggregateCrimes(crimes, precision);
+    const maxCount = grid.reduce((max, cell) => Math.max(max, cell.count), 0);
+
+    const gridWithDensity = grid.map((cell) => ({
+      ...cell,
+      density: classifyCrimeDensity(cell.count, maxCount),
+    }));
+
+    mapInstance.showCrimeOverlay(gridWithDensity, CRIME_COLORS);
+  }
+
+  /**
    * Load crime data and display the overlay on the map.
    * @param {Object} geojson - Isochrone GeoJSON FeatureCollection.
    */
@@ -143,15 +161,9 @@ export function initApp() {
     try {
       showCrimeStatus('Loading crime data...');
       const crimes = await fetchCrimeData({ geojson });
-      const grid = aggregateCrimes(crimes);
-      const maxCount = grid.reduce((max, cell) => Math.max(max, cell.count), 0);
+      lastRawCrimes = crimes;
 
-      const gridWithDensity = grid.map((cell) => ({
-        ...cell,
-        density: classifyCrimeDensity(cell.count, maxCount),
-      }));
-
-      mapInstance.showCrimeOverlay(gridWithDensity, CRIME_COLORS);
+      renderCrimeOverlay(crimes);
 
       if (crimes.length > 0) {
         showCrimeLegend(CRIME_COLORS);
@@ -167,11 +179,19 @@ export function initApp() {
     }
   }
 
+  // Re-aggregate crime data when zoom level changes
+  mapInstance.onZoomEnd(() => {
+    if (lastRawCrimes && lastRawCrimes.length > 0 && isCrimeOverlayEnabled()) {
+      renderCrimeOverlay(lastRawCrimes);
+    }
+  });
+
   // Crime overlay toggle
   setupCrimeOverlayToggle((enabled) => {
     if (enabled && lastGeojson) {
       loadCrimeOverlay(lastGeojson);
     } else {
+      lastRawCrimes = null;
       mapInstance.clearCrimeOverlay();
       mapInstance.clearCrimeMapLegend();
       hideCrimeStatus();
