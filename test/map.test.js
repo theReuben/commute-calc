@@ -320,6 +320,20 @@ describe('map', () => {
     });
   });
 
+  describe('getZoom', () => {
+    it('returns the current zoom level', () => {
+      expect(mapInstance.getZoom()).toBe(13);
+    });
+  });
+
+  describe('onZoomEnd', () => {
+    it('registers a zoomend handler on the map', () => {
+      const callback = vi.fn();
+      mapInstance.onZoomEnd(callback);
+      expect(mapInstance.map.on).toHaveBeenCalledWith('zoomend', expect.any(Function));
+    });
+  });
+
   describe('clearCrimeMapLegend', () => {
     it('removes the control when one exists', () => {
       const colorMap = { low: { fillColor: '#2b8a3e', color: '#1b5e20', label: 'Low crime' } };

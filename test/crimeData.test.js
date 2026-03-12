@@ -9,6 +9,7 @@ import {
   deduplicateCrimes,
   aggregateCrimes,
   classifyCrimeDensity,
+  getGridPrecision,
   CRIME_COLORS,
 } from '../src/crimeData.js';
 
@@ -267,6 +268,51 @@ describe('crimeData', () => {
 
     it('returns very-high at max count', () => {
       expect(classifyCrimeDensity(100, 100)).toBe('very-high');
+    });
+  });
+
+  describe('getGridPrecision', () => {
+    it('returns precision 1 for very low zoom levels', () => {
+      expect(getGridPrecision(8)).toBe(1);
+      expect(getGridPrecision(10)).toBe(1);
+    });
+
+    it('returns precision 2 for medium zoom levels', () => {
+      expect(getGridPrecision(11)).toBe(2);
+      expect(getGridPrecision(12)).toBe(2);
+    });
+
+    it('returns precision 3 for default zoom levels', () => {
+      expect(getGridPrecision(13)).toBe(3);
+      expect(getGridPrecision(14)).toBe(3);
+    });
+
+    it('returns precision 4 for high zoom levels', () => {
+      expect(getGridPrecision(15)).toBe(4);
+      expect(getGridPrecision(18)).toBe(4);
+    });
+  });
+
+  describe('aggregateCrimes with different precisions', () => {
+    it('produces fewer cells with lower precision', () => {
+      const crimes = [
+        { category: 'theft', lat: 51.501, lon: -0.101 },
+        { category: 'theft', lat: 51.502, lon: -0.102 },
+        { category: 'theft', lat: 51.509, lon: -0.109 },
+      ];
+      const fineCells = aggregateCrimes(crimes, 3);
+      const coarseCells = aggregateCrimes(crimes, 2);
+      expect(coarseCells.length).toBeLessThanOrEqual(fineCells.length);
+    });
+
+    it('merges all crimes into one cell at very low precision', () => {
+      const crimes = [
+        { category: 'theft', lat: 51.501, lon: -0.101 },
+        { category: 'burglary', lat: 51.509, lon: -0.109 },
+      ];
+      const grid = aggregateCrimes(crimes, 1);
+      expect(grid.length).toBe(1);
+      expect(grid[0].count).toBe(2);
     });
   });
 
