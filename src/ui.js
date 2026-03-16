@@ -1,4 +1,4 @@
-import { TIME_COLORS, ENV_GEOAPIFY_API_KEY, LOCATION_COLORS } from './config.js';
+import { TIME_COLORS, LOCATION_COLORS } from './config.js';
 
 /**
  * Show a status message in the sidebar.
@@ -71,27 +71,6 @@ export function getSelectedMode() {
 export function getSelectedIntervals() {
   const checkboxes = document.querySelectorAll('#time-intervals input[type="checkbox"]:checked');
   return Array.from(checkboxes).map((cb) => parseInt(cb.value, 10));
-}
-
-/**
- * Get the API key from the input field, falling back to the environment variable.
- * @returns {string}
- */
-export function getApiKey() {
-  const el = document.getElementById('api-key');
-  const inputValue = el ? el.value.trim() : '';
-  return inputValue || ENV_GEOAPIFY_API_KEY;
-}
-
-/**
- * Pre-populate the API key input from the environment variable if available.
- */
-export function initApiKey() {
-  if (!ENV_GEOAPIFY_API_KEY) return;
-  const el = document.getElementById('api-key');
-  if (el && !el.value) {
-    el.value = ENV_GEOAPIFY_API_KEY;
-  }
 }
 
 /**

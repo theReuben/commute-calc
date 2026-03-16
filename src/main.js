@@ -3,15 +3,13 @@ import { geocodeAddress } from './geocode.js';
 import { fetchIsochrones } from './isochrone.js';
 import { fetchCrimeData, aggregateCrimes, classifyCrimeDensity, getGridPrecision, CRIME_COLORS } from './crimeData.js';
 import { buildLiveabilityGrid, buildMultiLocationGrid, classifyLiveability } from './liveability.js';
-import { LIVEABILITY_COLORS } from './config.js';
+import { LIVEABILITY_COLORS, ENV_GEOAPIFY_API_KEY } from './config.js';
 import {
   showStatus,
   hideStatus,
   updateLegend,
   getSelectedMode,
   getSelectedIntervals,
-  getApiKey,
-  initApiKey,
   setupModeButtons,
   showSearchResults,
   hideSearchResults,
@@ -37,9 +35,6 @@ import {
  */
 export function initApp() {
   const mapInstance = createMap('map');
-
-  // Pre-populate API key from environment variable if available
-  initApiKey();
 
   // Set up transport mode switching (kept for backward compat, not used in multi-location)
   setupModeButtons();
@@ -141,9 +136,9 @@ export function initApp() {
       return;
     }
 
-    const apiKey = getApiKey();
+    const apiKey = ENV_GEOAPIFY_API_KEY;
     if (!apiKey) {
-      showStatus('Please enter your Geoapify API key.', 'error');
+      showStatus('Geoapify API key not configured. Set VITE_GEOAPIFY_API_KEY in your environment.', 'error');
       return;
     }
 
