@@ -249,17 +249,16 @@ export function showLiveabilityLegend(colorMap) {
   if (!container) return;
 
   container.innerHTML = '';
-  ['excellent', 'good', 'fair', 'poor'].forEach((level) => {
-    const config = colorMap[level];
-    if (!config) return;
-    const item = document.createElement('div');
-    item.className = 'legend-item';
-    item.innerHTML = `
-      <span class="legend-color" style="background: ${config.fillColor}"></span>
-      <span>${config.label}</span>
-    `;
-    container.appendChild(item);
-  });
+  // Gradient bar matching the heat map colors
+  const gradientBar = document.createElement('div');
+  gradientBar.style.cssText = 'height:12px;border-radius:3px;margin:4px 0;' +
+    'background:linear-gradient(to right, #e03131, #f76707, #f59f00, #74b816, #2b8a3e);';
+  container.appendChild(gradientBar);
+
+  const labels = document.createElement('div');
+  labels.style.cssText = 'display:flex;justify-content:space-between;font-size:10px;';
+  labels.innerHTML = '<span>Poor</span><span>Fair</span><span>Good</span><span>Excellent</span>';
+  container.appendChild(labels);
 
   const legend = document.getElementById('liveability-legend');
   if (legend) legend.hidden = false;

@@ -1,4 +1,5 @@
 import L from 'leaflet';
+import 'leaflet.heat';
 import { DEFAULT_CENTER, DEFAULT_ZOOM, TIME_COLORS, LOCATION_COLORS } from './config.js';
 import { getFeatureMinutes } from './isochrone.js';
 
@@ -240,7 +241,8 @@ export function createMap(elementId) {
   }
 
   /**
-   * Display liveability heatmap rectangles on the map.
+   * Display liveability heatmap on the map using leaflet.heat for smooth gradients.
+   * An invisible interactive layer provides tooltips and popups on hover/click.
    * @param {Array<{lat: number, lon: number, score: number, level: string, commuteScore: number, crimeScore: number, crimeCount: number}>} gridCells
    * @param {Object} colorMap - Maps liveability levels to {fillColor, color}.
    * @param {number} cellSize - Grid cell size in degrees.
@@ -248,31 +250,51 @@ export function createMap(elementId) {
   function showLiveabilityOverlay(gridCells, colorMap, cellSize) {
     clearLiveabilityOverlay();
 
-    gridCells.forEach((cell) => {
-      const colors = colorMap[cell.level] || { fillColor: '#adb5bd', color: '#495057' };
-      const half = cellSize / 2;
-      const bounds = [
-        [cell.lat - half, cell.lon - half],
-        [cell.lat + half, cell.lon + half],
-      ];
+    if (gridCells.length === 0) return;
 
-      const rect = L.rectangle(bounds, {
-        fillColor: colors.fillColor,
-        color: colors.color,
-        weight: 0.5,
-        opacity: 0.4,
-        fillOpacity: 0.45,
+    // Build weighted points for heat layer: [lat, lng, intensity]
+    const heatPoints = gridCells.map((cell) => [cell.lat, cell.lon, cell.score]);
+
+    // Scale radius based on cell size so heat blobs cover the grid properly
+    const approxPixelsPerDegree = 111320 * Math.cos((gridCells[0].lat * Math.PI) / 180);
+    const zoom = map.getZoom();
+    const metersPerPixel = (40075016.686 * Math.cos((gridCells[0].lat * Math.PI) / 180)) / Math.pow(2, zoom + 8);
+    const cellMeters = cellSize * approxPixelsPerDegree;
+    const radiusPx = Math.max(12, Math.round((cellMeters / metersPerPixel) * 0.8));
+
+    const heatLayer = L.heatLayer(heatPoints, {
+      radius: radiusPx,
+      blur: Math.round(radiusPx * 0.6),
+      maxZoom: 18,
+      max: 1.0,
+      minOpacity: 0.35,
+      gradient: {
+        0.0: '#e03131',
+        0.25: '#f76707',
+        0.5: '#f59f00',
+        0.75: '#74b816',
+        1.0: '#2b8a3e',
+      },
+    }).addTo(liveabilityLayer);
+
+    // Interactive layer: invisible circle markers for tooltips and popups
+    gridCells.forEach((cell) => {
+      const marker = L.circleMarker([cell.lat, cell.lon], {
+        radius: Math.max(6, radiusPx / 2),
+        fillOpacity: 0,
+        opacity: 0,
+        weight: 0,
+        interactive: true,
       }).addTo(liveabilityLayer);
 
       const pct = (cell.score * 100).toFixed(0);
       const tooltipText = `Liveability: ${pct}%`;
-      rect.bindTooltip(tooltipText, { direction: 'top', offset: [0, -6] });
+      marker.bindTooltip(tooltipText, { direction: 'top', offset: [0, -6] });
 
       const commutePct = (cell.commuteScore * 100).toFixed(0);
       const crimePct = (cell.crimeScore * 100).toFixed(0);
       let popupHtml = `<strong>Liveability: ${pct}%</strong><br>` +
         `Commute: ${commutePct}%<br>`;
-      // Show per-location breakdown if available
       if (cell.perLocation && cell.perLocation.length > 1) {
         cell.perLocation.forEach((loc) => {
           const locPct = (loc.commuteScore * 100).toFixed(0);
@@ -280,7 +302,7 @@ export function createMap(elementId) {
         });
       }
       popupHtml += `Safety: ${crimePct}%<br>Crimes nearby: ${cell.crimeCount}`;
-      rect.bindPopup(popupHtml);
+      marker.bindPopup(popupHtml);
     });
   }
 
@@ -292,7 +314,7 @@ export function createMap(elementId) {
   }
 
   /**
-   * Add a legend control to the map showing liveability levels.
+   * Add a legend control to the map showing a liveability gradient.
    * @param {Object} colorMap - Maps level names to {fillColor, color, label}.
    */
   function showLiveabilityMapLegend(colorMap) {
@@ -304,14 +326,21 @@ export function createMap(elementId) {
       const title = document.createElement('strong');
       title.textContent = 'Liveability';
       container.appendChild(title);
-      ['excellent', 'good', 'fair', 'poor'].forEach((level) => {
-        const config = colorMap[level];
-        if (!config) return;
-        const item = document.createElement('div');
-        item.className = 'liveability-legend-item';
-        item.innerHTML = `<span class="liveability-legend-swatch" style="background:${config.fillColor};border-color:${config.color}"></span>${config.label}`;
-        container.appendChild(item);
-      });
+
+      // Gradient bar
+      const gradientBar = document.createElement('div');
+      gradientBar.className = 'liveability-gradient-bar';
+      gradientBar.style.cssText = 'height:12px;border-radius:3px;margin:6px 0 4px;' +
+        'background:linear-gradient(to right, #e03131, #f76707, #f59f00, #74b816, #2b8a3e);';
+      container.appendChild(gradientBar);
+
+      // Labels under gradient
+      const labels = document.createElement('div');
+      labels.className = 'liveability-gradient-labels';
+      labels.style.cssText = 'display:flex;justify-content:space-between;font-size:10px;';
+      labels.innerHTML = '<span>Poor</span><span>Fair</span><span>Good</span><span>Excellent</span>';
+      container.appendChild(labels);
+
       return container;
     };
     liveabilityControl.addTo(map);

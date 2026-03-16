@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// Mock leaflet.heat — must be before leaflet mock since import order matters
+vi.mock('leaflet.heat', () => ({}));
+
 // Mock leaflet — vi.mock factory is hoisted so all values must be defined inline
 vi.mock('leaflet', () => {
   const mockOn = vi.fn();
@@ -34,6 +37,11 @@ vi.mock('leaflet', () => {
     onAdd: null,
   };
 
+  const mockHeatLayer = {
+    addTo: vi.fn().mockReturnThis(),
+    remove: vi.fn(),
+  };
+
   return {
     default: {
       map: vi.fn().mockReturnValue({
@@ -41,6 +49,7 @@ vi.mock('leaflet', () => {
         on: vi.fn(),
         getZoom: vi.fn().mockReturnValue(13),
         fitBounds: vi.fn(),
+        getContainer: vi.fn().mockReturnValue({ style: {} }),
       }),
       tileLayer: vi.fn().mockReturnValue({ addTo: vi.fn() }),
       marker: vi.fn().mockReturnValue(mockMarker),
@@ -49,11 +58,13 @@ vi.mock('leaflet', () => {
       geoJSON: vi.fn().mockReturnValue({ addTo: vi.fn() }),
       circleMarker: vi.fn().mockReturnValue(mockCircleMarker),
       control: vi.fn().mockReturnValue(mockControl),
+      heatLayer: vi.fn().mockReturnValue(mockHeatLayer),
       _mockMarker: mockMarker,
       _mockLayerGroup: mockLayerGroup,
       _mockCrimeLayerGroup: mockCrimeLayerGroup,
       _mockCircleMarker: mockCircleMarker,
       _mockControl: mockControl,
+      _mockHeatLayer: mockHeatLayer,
     },
   };
 });
