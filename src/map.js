@@ -1,5 +1,5 @@
 import L from 'leaflet';
-import { DEFAULT_CENTER, DEFAULT_ZOOM, TIME_COLORS } from './config.js';
+import { DEFAULT_CENTER, DEFAULT_ZOOM, TIME_COLORS, LOCATION_COLORS } from './config.js';
 import { getFeatureMinutes } from './isochrone.js';
 
 /**
@@ -21,6 +21,12 @@ export function createMap(elementId) {
   let crimeControl = null;
   let liveabilityControl = null;
   let markerDragCallback = null;
+
+  /** Map of locationId -> L.circleMarker for multi-location support */
+  const locationMarkers = new Map();
+  /** Callback for when a map click should set a location */
+  let pendingMapClickLocationId = null;
+  let mapClickLocationCallback = null;
 
   /**
    * Escape HTML special characters to prevent XSS.
@@ -264,12 +270,17 @@ export function createMap(elementId) {
 
       const commutePct = (cell.commuteScore * 100).toFixed(0);
       const crimePct = (cell.crimeScore * 100).toFixed(0);
-      rect.bindPopup(
-        `<strong>Liveability: ${pct}%</strong><br>` +
-        `Commute: ${commutePct}%<br>` +
-        `Safety: ${crimePct}%<br>` +
-        `Crimes nearby: ${cell.crimeCount}`
-      );
+      let popupHtml = `<strong>Liveability: ${pct}%</strong><br>` +
+        `Commute: ${commutePct}%<br>`;
+      // Show per-location breakdown if available
+      if (cell.perLocation && cell.perLocation.length > 1) {
+        cell.perLocation.forEach((loc) => {
+          const locPct = (loc.commuteScore * 100).toFixed(0);
+          popupHtml += `&nbsp;&nbsp;${escapeHtml(loc.name)}: ${locPct}%<br>`;
+        });
+      }
+      popupHtml += `Safety: ${crimePct}%<br>Crimes nearby: ${cell.crimeCount}`;
+      rect.bindPopup(popupHtml);
     });
   }
 
@@ -334,6 +345,112 @@ export function createMap(elementId) {
     });
   }
 
+  /**
+   * Add or update a location marker on the map.
+   * @param {string} locationId
+   * @param {number} lat
+   * @param {number} lon
+   * @param {number} colorIndex - Index into LOCATION_COLORS.
+   * @param {string} [label]
+   */
+  function setLocationMarker(locationId, lat, lon, colorIndex, label) {
+    const markerColor = LOCATION_COLORS[colorIndex % LOCATION_COLORS.length];
+    if (locationMarkers.has(locationId)) {
+      const existing = locationMarkers.get(locationId);
+      existing.setLatLng([lat, lon]);
+      existing.setStyle({ color: markerColor.color, fillColor: markerColor.fillColor });
+    } else {
+      const marker = L.circleMarker([lat, lon], {
+        radius: 10,
+        fillColor: markerColor.fillColor,
+        color: markerColor.color,
+        weight: 3,
+        opacity: 1,
+        fillOpacity: 0.8,
+      }).addTo(map);
+      locationMarkers.set(locationId, marker);
+    }
+    const marker = locationMarkers.get(locationId);
+    const popupText = label ? escapeHtml(label) : `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+    marker.bindPopup(popupText);
+    map.setView([lat, lon], Math.max(map.getZoom(), 12));
+  }
+
+  /**
+   * Remove a location marker from the map.
+   * @param {string} locationId
+   */
+  function removeLocationMarker(locationId) {
+    if (locationMarkers.has(locationId)) {
+      locationMarkers.get(locationId).remove();
+      locationMarkers.delete(locationId);
+    }
+  }
+
+  /**
+   * Clear all location markers from the map.
+   */
+  function clearLocationMarkers() {
+    locationMarkers.forEach((marker) => marker.remove());
+    locationMarkers.clear();
+  }
+
+  /**
+   * Display isochrone outlines for multiple locations.
+   * Each location's isochrone is drawn with its marker color.
+   * @param {Array<{colorIndex: number, geojson: Object}>} locationIsochrones
+   */
+  function showMultiIsochrones(locationIsochrones) {
+    clearIsochrones();
+
+    locationIsochrones.forEach(({ colorIndex, geojson }) => {
+      const markerColor = LOCATION_COLORS[colorIndex % LOCATION_COLORS.length];
+      const features = [...(geojson.features || [])].sort((a, b) => {
+        return (b.properties?.value || 0) - (a.properties?.value || 0);
+      });
+
+      features.forEach((feature) => {
+        L.geoJSON(feature, {
+          style: {
+            color: markerColor.color,
+            fillColor: markerColor.fillColor,
+            fillOpacity: 0.12,
+            weight: 2,
+            opacity: 0.6,
+          },
+        }).addTo(isochroneLayer);
+      });
+    });
+
+    const bounds = isochroneLayer.getBounds();
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [30, 30] });
+    }
+  }
+
+  /**
+   * Set a pending map click handler for setting a location.
+   * @param {string|null} locationId - The location to set on next click, or null to cancel.
+   * @param {function} [callback] - Called with (lat, lon, locationId).
+   */
+  function setPendingMapClickLocation(locationId, callback) {
+    pendingMapClickLocationId = locationId;
+    mapClickLocationCallback = callback || null;
+    if (locationId) {
+      map.getContainer().style.cursor = 'crosshair';
+    } else {
+      map.getContainer().style.cursor = '';
+    }
+  }
+
+  /**
+   * Get the pending map click location ID.
+   * @returns {string|null}
+   */
+  function getPendingMapClickLocationId() {
+    return pendingMapClickLocationId;
+  }
+
   return {
     map,
     setWorkLocation,
@@ -352,5 +469,11 @@ export function createMap(elementId) {
     onMarkerDrag,
     getZoom,
     onZoomEnd,
+    setLocationMarker,
+    removeLocationMarker,
+    clearLocationMarkers,
+    showMultiIsochrones,
+    setPendingMapClickLocation,
+    getPendingMapClickLocationId,
   };
 }

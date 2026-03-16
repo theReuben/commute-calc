@@ -178,6 +178,96 @@ export function classifyLiveability(score) {
 }
 
 /**
+ * Build a multi-location liveability grid.
+ * Each cell is scored based on commute to ALL locations — only cells reachable
+ * from every location are included.
+ *
+ * @param {Object} params
+ * @param {Array<{geojson: Object, name: string}>} params.locationData - Per-location isochrone data.
+ * @param {Array<{category: string, lat: number, lon: number}>} params.crimes - Crime records.
+ * @param {number} [params.precision=2] - Grid precision.
+ * @param {{commute: number, crime: number}} [params.weights] - Scoring weights.
+ * @returns {Array<{lat: number, lon: number, score: number, commuteScore: number, crimeScore: number, crimeCount: number, perLocation: Array<{name: string, commuteScore: number}>}>}
+ */
+export function buildMultiLocationGrid({ locationData, crimes, precision = 2, weights = DEFAULT_WEIGHTS }) {
+  if (!locationData || locationData.length === 0) return [];
+
+  // Prepare sorted features per location
+  const perLocation = locationData.map((loc) => {
+    const sorted = [...(loc.geojson.features || [])].sort((a, b) =>
+      (a.properties?.value || 0) - (b.properties?.value || 0)
+    );
+    return { name: loc.name, features: sorted };
+  });
+
+  // Compute combined bounding box from all locations' outermost isochrones
+  let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+  for (const loc of locationData) {
+    if (!loc.geojson.features || loc.geojson.features.length === 0) continue;
+    const outerFeature = loc.geojson.features.reduce((outer, f) =>
+      (f.properties?.value || 0) > (outer.properties?.value || 0) ? f : outer,
+      loc.geojson.features[0]
+    );
+    const bbox = getBBoxFromFeature(outerFeature);
+    if (!bbox) continue;
+    if (bbox.minLat < minLat) minLat = bbox.minLat;
+    if (bbox.maxLat > maxLat) maxLat = bbox.maxLat;
+    if (bbox.minLon < minLon) minLon = bbox.minLon;
+    if (bbox.maxLon > maxLon) maxLon = bbox.maxLon;
+  }
+  if (!isFinite(minLat)) return [];
+
+  const factor = Math.pow(10, precision);
+  const step = 1 / factor;
+
+  // Build crime density lookup
+  const crimeGrid = new Map();
+  for (const crime of crimes) {
+    const key = `${Math.round(crime.lat * factor)}:${Math.round(crime.lon * factor)}`;
+    crimeGrid.set(key, (crimeGrid.get(key) || 0) + 1);
+  }
+  const maxCrime = Math.max(1, ...crimeGrid.values());
+
+  const cells = [];
+  for (let lat = minLat; lat <= maxLat; lat += step) {
+    for (let lon = minLon; lon <= maxLon; lon += step) {
+      const roundedLat = Math.round(lat * factor) / factor;
+      const roundedLon = Math.round(lon * factor) / factor;
+
+      // Get commute score for each location; skip if any returns 0 (unreachable)
+      const scores = [];
+      let reachableFromAll = true;
+      for (const loc of perLocation) {
+        const score = getCommuteScore(roundedLon, roundedLat, loc.features);
+        if (score === 0) { reachableFromAll = false; break; }
+        scores.push({ name: loc.name, commuteScore: score });
+      }
+      if (!reachableFromAll) continue;
+
+      // Combined commute score is the average across all locations
+      const commuteScore = scores.reduce((sum, s) => sum + s.commuteScore, 0) / scores.length;
+
+      const crimeKey = `${Math.round(roundedLat * factor)}:${Math.round(roundedLon * factor)}`;
+      const crimeCount = crimeGrid.get(crimeKey) || 0;
+      const crimeScore = 1 - (crimeCount / maxCrime);
+      const score = (weights.commute * commuteScore) + (weights.crime * crimeScore);
+
+      cells.push({
+        lat: roundedLat,
+        lon: roundedLon,
+        score,
+        commuteScore,
+        crimeScore,
+        crimeCount,
+        perLocation: scores,
+      });
+    }
+  }
+
+  return cells;
+}
+
+/**
  * Compute the bounding box from a GeoJSON feature.
  * @param {Object} feature
  * @returns {{minLat: number, maxLat: number, minLon: number, maxLon: number}|null}

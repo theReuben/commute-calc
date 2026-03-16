@@ -1,4 +1,4 @@
-import { TIME_COLORS, ENV_GEOAPIFY_API_KEY } from './config.js';
+import { TIME_COLORS, ENV_GEOAPIFY_API_KEY, LOCATION_COLORS } from './config.js';
 
 /**
  * Show a status message in the sidebar.
@@ -271,4 +271,207 @@ export function showLiveabilityLegend(colorMap) {
 export function hideLiveabilityLegend() {
   const legend = document.getElementById('liveability-legend');
   if (legend) legend.hidden = true;
+}
+
+/** Counter for unique location IDs */
+let locationIdCounter = 0;
+
+/**
+ * Create a location card element for the locations list.
+ * @param {Object} [options]
+ * @param {string} [options.name] - Pre-filled name.
+ * @param {function} onSearch - Called with (query, locationId).
+ * @param {function} onRemove - Called with (locationId).
+ * @param {function} onSetOnMap - Called with (locationId).
+ * @returns {{element: HTMLElement, id: string}}
+ */
+export function createLocationCard({ onSearch, onRemove, onSetOnMap, name } = {}) {
+  const id = `loc-${locationIdCounter++}`;
+  const colorIndex = (locationIdCounter - 1) % LOCATION_COLORS.length;
+  const markerColor = LOCATION_COLORS[colorIndex];
+
+  const card = document.createElement('div');
+  card.className = 'location-card';
+  card.dataset.locationId = id;
+  card.style.borderLeftColor = markerColor.color;
+
+  card.innerHTML = `
+    <div class="location-card-header">
+      <input type="text" class="location-name" placeholder="Location name (e.g. Work, Airport)" value="${name || ''}" />
+      <button class="remove-location-btn" type="button" title="Remove location" aria-label="Remove location">&times;</button>
+    </div>
+    <div class="location-search-row">
+      <input type="text" class="location-search-input" placeholder="Search address..." autocomplete="off" />
+      <button class="location-search-btn" type="button" aria-label="Search">&#x1F50D;</button>
+    </div>
+    <div class="location-search-results search-results" hidden></div>
+    <button class="location-set-map-btn secondary-btn" type="button">Click map to set</button>
+    <div class="location-settings-row">
+      <select class="location-mode-select">
+        <option value="drive">&#x1F697; Car</option>
+        <option value="transit">&#x1F68C; Transit</option>
+        <option value="bicycle">&#x1F6B2; Cycle</option>
+        <option value="walk">&#x1F6B6; Walk</option>
+      </select>
+      <select class="location-time-select">
+        <option value="10">10 min</option>
+        <option value="20">20 min</option>
+        <option value="30" selected>30 min</option>
+        <option value="45">45 min</option>
+        <option value="60">60 min</option>
+      </select>
+    </div>
+    <div class="location-coords" hidden></div>
+  `;
+
+  // Search button
+  const searchBtn = card.querySelector('.location-search-btn');
+  const searchInput = card.querySelector('.location-search-input');
+  const doSearch = () => {
+    const query = searchInput.value.trim();
+    if (query && onSearch) onSearch(query, id);
+  };
+  searchBtn.addEventListener('click', doSearch);
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); doSearch(); }
+  });
+
+  // Remove button
+  card.querySelector('.remove-location-btn').addEventListener('click', () => {
+    if (onRemove) onRemove(id);
+  });
+
+  // Set on map button
+  card.querySelector('.location-set-map-btn').addEventListener('click', () => {
+    if (onSetOnMap) onSetOnMap(id);
+  });
+
+  return { element: card, id, colorIndex };
+}
+
+/**
+ * Show search results inside a location card.
+ * @param {string} locationId
+ * @param {Array<{displayName: string, lat: number, lon: number}>} results
+ * @param {function} onSelect - Called with (result, locationId).
+ */
+export function showLocationSearchResults(locationId, results, onSelect) {
+  const card = document.querySelector(`[data-location-id="${locationId}"]`);
+  if (!card) return;
+  const container = card.querySelector('.location-search-results');
+  if (!container) return;
+
+  if (results.length === 0) {
+    container.innerHTML = '<div class="result-item">No results found</div>';
+    container.hidden = false;
+    return;
+  }
+
+  container.innerHTML = '';
+  results.forEach((result) => {
+    const item = document.createElement('div');
+    item.className = 'result-item';
+    item.textContent = result.displayName;
+    item.addEventListener('click', () => {
+      onSelect(result, locationId);
+      container.hidden = true;
+    });
+    container.appendChild(item);
+  });
+  container.hidden = false;
+}
+
+/**
+ * Update a location card to show set coordinates.
+ * @param {string} locationId
+ * @param {number} lat
+ * @param {number} lon
+ * @param {string} [label]
+ */
+export function setLocationCoords(locationId, lat, lon, label) {
+  const card = document.querySelector(`[data-location-id="${locationId}"]`);
+  if (!card) return;
+  const coordsEl = card.querySelector('.location-coords');
+  if (coordsEl) {
+    coordsEl.textContent = label || `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+    coordsEl.hidden = false;
+    coordsEl.dataset.lat = lat;
+    coordsEl.dataset.lon = lon;
+  }
+  if (label) {
+    const searchInput = card.querySelector('.location-search-input');
+    if (searchInput) searchInput.value = label;
+  }
+  // Deactivate "click map" mode
+  card.querySelector('.location-set-map-btn')?.classList.remove('active');
+}
+
+/**
+ * Get all configured locations from the UI.
+ * @returns {Array<{id: string, name: string, lat: number, lon: number, mode: string, maxMinutes: number, colorIndex: number}>}
+ */
+export function getAllLocations() {
+  const cards = document.querySelectorAll('.location-card');
+  const locations = [];
+  cards.forEach((card, index) => {
+    const coordsEl = card.querySelector('.location-coords');
+    if (!coordsEl || coordsEl.hidden) return;
+    const lat = parseFloat(coordsEl.dataset.lat);
+    const lon = parseFloat(coordsEl.dataset.lon);
+    if (isNaN(lat) || isNaN(lon)) return;
+
+    const name = card.querySelector('.location-name')?.value || `Location ${index + 1}`;
+    const mode = card.querySelector('.location-mode-select')?.value || 'drive';
+    const maxMinutes = parseInt(card.querySelector('.location-time-select')?.value || '30', 10);
+    const colorIndex = index % LOCATION_COLORS.length;
+
+    locations.push({
+      id: card.dataset.locationId,
+      name,
+      lat,
+      lon,
+      mode,
+      maxMinutes,
+      colorIndex,
+    });
+  });
+  return locations;
+}
+
+/**
+ * Remove a location card from the DOM.
+ * @param {string} locationId
+ */
+export function removeLocationCard(locationId) {
+  const card = document.querySelector(`[data-location-id="${locationId}"]`);
+  if (card) card.remove();
+}
+
+/**
+ * Update the legend to show per-location isochrone info.
+ * @param {Array<{name: string, maxMinutes: number, colorIndex: number}>} locations
+ */
+export function updateMultiLocationLegend(locations) {
+  const legend = document.getElementById('legend');
+  const items = document.getElementById('legend-items');
+  if (!legend || !items) return;
+
+  if (locations.length === 0) {
+    legend.hidden = true;
+    return;
+  }
+
+  items.innerHTML = '';
+  locations.forEach((loc) => {
+    const markerColor = LOCATION_COLORS[loc.colorIndex];
+    const item = document.createElement('div');
+    item.className = 'legend-item';
+    item.innerHTML = `
+      <span class="legend-color" style="background: ${markerColor.fillColor}"></span>
+      <span>${loc.name} (${loc.maxMinutes} min)</span>
+    `;
+    items.appendChild(item);
+  });
+
+  legend.hidden = false;
 }
