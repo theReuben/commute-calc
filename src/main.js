@@ -199,8 +199,11 @@ export function initApp() {
    * Render the crime overlay from already-fetched raw crimes using the current zoom level.
    * @param {Array} crimes - Raw crime records.
    */
-  function renderCrimeOverlay(crimes) {
+  function renderCrimeOverlay(crimes, force = false) {
     const precision = getGridPrecision(mapInstance.getZoom());
+    if (!force && precision === lastCrimePrecision) return;
+    lastCrimePrecision = precision;
+
     const grid = aggregateCrimes(crimes, precision);
     const maxCount = grid.reduce((max, cell) => Math.max(max, cell.count), 0);
 
@@ -215,27 +218,31 @@ export function initApp() {
   /**
    * Render the liveability heatmap using multi-location data.
    */
-  function renderLiveabilityOverlay() {
+  function renderLiveabilityOverlay(force = false) {
     if (!lastLocationData || !lastRawCrimes) return;
 
     const zoom = mapInstance.getZoom();
     const precision = zoom <= 10 ? 1 : zoom <= 12 ? 2 : 3;
+    if (!force && precision === lastLiveabilityPrecision) return;
+    lastLiveabilityPrecision = precision;
 
-    let grid;
-    if (lastLocationData.length === 1) {
-      // Single location: use original algorithm
-      grid = buildLiveabilityGrid({
-        geojson: lastLocationData[0].geojson,
-        crimes: lastRawCrimes,
-        precision,
-      });
-    } else {
-      // Multiple locations: use multi-location algorithm
-      grid = buildMultiLocationGrid({
-        locationData: lastLocationData,
-        crimes: lastRawCrimes,
-        precision,
-      });
+    // Use cached grid if available for this precision
+    let grid = liveabilityGridCache.get(precision);
+    if (!grid) {
+      if (lastLocationData.length === 1) {
+        grid = buildLiveabilityGrid({
+          geojson: lastLocationData[0].geojson,
+          crimes: lastRawCrimes,
+          precision,
+        });
+      } else {
+        grid = buildMultiLocationGrid({
+          locationData: lastLocationData,
+          crimes: lastRawCrimes,
+          precision,
+        });
+      }
+      liveabilityGridCache.set(precision, grid);
     }
 
     const cellSize = 1 / Math.pow(10, precision);
@@ -257,15 +264,20 @@ export function initApp() {
       const crimes = await fetchCrimeData({ geojson });
       lastRawCrimes = crimes;
 
+      // New data — invalidate caches and force render
+      lastCrimePrecision = null;
+      lastLiveabilityPrecision = null;
+      liveabilityGridCache.clear();
+
       const mode = getOverlayMode();
       if (mode === 'crime') {
-        renderCrimeOverlay(crimes);
+        renderCrimeOverlay(crimes, true);
         if (crimes.length > 0) {
           showCrimeLegend(CRIME_COLORS);
           mapInstance.showCrimeMapLegend(CRIME_COLORS);
         }
       } else if (mode === 'liveability') {
-        renderLiveabilityOverlay();
+        renderLiveabilityOverlay(true);
         showLiveabilityLegend(LIVEABILITY_COLORS);
         mapInstance.showLiveabilityMapLegend(LIVEABILITY_COLORS);
       }
@@ -285,6 +297,9 @@ export function initApp() {
    */
   function clearAllOverlays() {
     lastRawCrimes = null;
+    lastCrimePrecision = null;
+    lastLiveabilityPrecision = null;
+    liveabilityGridCache.clear();
     mapInstance.clearCrimeOverlay();
     mapInstance.clearCrimeMapLegend();
     mapInstance.clearLiveabilityOverlay();
@@ -294,16 +309,29 @@ export function initApp() {
     hideLiveabilityLegend();
   }
 
-  // Re-aggregate overlays when zoom level changes
+  // Track last precision to avoid redundant re-renders when zoom changes
+  // but the grid resolution stays the same
+  let lastCrimePrecision = null;
+  let lastLiveabilityPrecision = null;
+
+  // Cache liveability grid per precision to avoid expensive recalculation
+  const liveabilityGridCache = new Map();
+
+  // Debounced zoom handler — avoids rapid consecutive re-renders during
+  // scroll-wheel or pinch zoom sequences
+  let zoomDebounceTimer = null;
   mapInstance.onZoomEnd(() => {
-    const mode = getOverlayMode();
-    if (lastRawCrimes && lastRawCrimes.length > 0) {
-      if (mode === 'crime') {
-        renderCrimeOverlay(lastRawCrimes);
-      } else if (mode === 'liveability' && lastLocationData) {
-        renderLiveabilityOverlay();
+    clearTimeout(zoomDebounceTimer);
+    zoomDebounceTimer = setTimeout(() => {
+      const mode = getOverlayMode();
+      if (lastRawCrimes && lastRawCrimes.length > 0) {
+        if (mode === 'crime') {
+          renderCrimeOverlay(lastRawCrimes);
+        } else if (mode === 'liveability' && lastLocationData) {
+          renderLiveabilityOverlay();
+        }
       }
-    }
+    }, 200);
   });
 
   // Overlay mode selector
@@ -322,13 +350,13 @@ export function initApp() {
     }
 
     if (lastLocationData && lastRawCrimes) {
-      // Re-render with existing data
+      // Re-render with existing data (force since mode changed)
       if (mode === 'crime') {
-        renderCrimeOverlay(lastRawCrimes);
+        renderCrimeOverlay(lastRawCrimes, true);
         showCrimeLegend(CRIME_COLORS);
         mapInstance.showCrimeMapLegend(CRIME_COLORS);
       } else if (mode === 'liveability') {
-        renderLiveabilityOverlay();
+        renderLiveabilityOverlay(true);
         showLiveabilityLegend(LIVEABILITY_COLORS);
         mapInstance.showLiveabilityMapLegend(LIVEABILITY_COLORS);
       }
