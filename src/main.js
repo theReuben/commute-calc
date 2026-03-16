@@ -2,7 +2,7 @@ import { createMap } from './map.js';
 import { geocodeAddress } from './geocode.js';
 import { fetchIsochrones } from './isochrone.js';
 import { fetchCrimeData, aggregateCrimes, classifyCrimeDensity, getGridPrecision, CRIME_COLORS } from './crimeData.js';
-import { buildLiveabilityGrid, classifyLiveability } from './liveability.js';
+import { buildLiveabilityGrid, buildMultiLocationGrid, classifyLiveability } from './liveability.js';
 import { LIVEABILITY_COLORS } from './config.js';
 import {
   showStatus,
@@ -24,6 +24,12 @@ import {
   hideCrimeLegend,
   showLiveabilityLegend,
   hideLiveabilityLegend,
+  createLocationCard,
+  showLocationSearchResults,
+  setLocationCoords,
+  getAllLocations,
+  removeLocationCard,
+  updateMultiLocationLegend,
 } from './ui.js';
 
 /**
@@ -35,66 +41,103 @@ export function initApp() {
   // Pre-populate API key from environment variable if available
   initApiKey();
 
-  // Set up transport mode switching
+  // Set up transport mode switching (kept for backward compat, not used in multi-location)
   setupModeButtons();
 
-  // Handle marker drag to update work location
-  mapInstance.onMarkerDrag((lat, lon) => {
-    mapInstance.setWorkLocation(lat, lon);
-  });
+  // Track which location is being set via map click
+  let activeMapClickLocationId = null;
 
-  // Map click to set work location
+  // Handle map click - either set location for active card or legacy behavior
   mapInstance.onMapClick((lat, lon) => {
-    mapInstance.setWorkLocation(lat, lon);
-    hideStatus();
+    if (activeMapClickLocationId) {
+      const locationId = activeMapClickLocationId;
+      activeMapClickLocationId = null;
+      mapInstance.setPendingMapClickLocation(null);
+
+      // Find the card's color index
+      const cards = document.querySelectorAll('.location-card');
+      let colorIndex = 0;
+      cards.forEach((card, idx) => {
+        if (card.dataset.locationId === locationId) colorIndex = idx;
+      });
+
+      mapInstance.setLocationMarker(locationId, lat, lon, colorIndex);
+      setLocationCoords(locationId, lat, lon);
+      hideStatus();
+    }
   });
 
-  // Search functionality
-  const searchInput = document.getElementById('location-search');
-  const searchBtn = document.getElementById('search-btn');
+  // Location card management
+  const locationsList = document.getElementById('locations-list');
+  const addLocationBtn = document.getElementById('add-location-btn');
 
-  async function performSearch() {
-    const query = searchInput.value;
-    if (!query.trim()) return;
+  function addLocation(name) {
+    const { element, id } = createLocationCard({
+      name,
+      onSearch: async (query, locationId) => {
+        showStatus('Searching...', 'info');
+        try {
+          const results = await geocodeAddress(query);
+          hideStatus();
+          showLocationSearchResults(locationId, results, (result, locId) => {
+            const cards = document.querySelectorAll('.location-card');
+            let colorIndex = 0;
+            cards.forEach((card, idx) => {
+              if (card.dataset.locationId === locId) colorIndex = idx;
+            });
+            mapInstance.setLocationMarker(locId, result.lat, result.lon, colorIndex, result.displayName);
+            setLocationCoords(locId, result.lat, result.lon, result.displayName);
+          });
+        } catch (err) {
+          showStatus(`Search error: ${err.message}`, 'error');
+        }
+      },
+      onRemove: (locationId) => {
+        mapInstance.removeLocationMarker(locationId);
+        removeLocationCard(locationId);
+        if (activeMapClickLocationId === locationId) {
+          activeMapClickLocationId = null;
+          mapInstance.setPendingMapClickLocation(null);
+        }
+      },
+      onSetOnMap: (locationId) => {
+        // Toggle map click mode for this location
+        if (activeMapClickLocationId === locationId) {
+          activeMapClickLocationId = null;
+          mapInstance.setPendingMapClickLocation(null);
+          showStatus('', 'info');
+          hideStatus();
+        } else {
+          activeMapClickLocationId = locationId;
+          mapInstance.setPendingMapClickLocation(locationId);
+          showStatus('Click on the map to set this location', 'info');
+        }
+        // Update button active states
+        document.querySelectorAll('.location-set-map-btn').forEach((btn) => {
+          const card = btn.closest('.location-card');
+          btn.classList.toggle('active', card?.dataset.locationId === activeMapClickLocationId);
+        });
+      },
+    });
 
-    showStatus('Searching...', 'info');
-    try {
-      const results = await geocodeAddress(query);
-      hideStatus();
-      showSearchResults(results, (result) => {
-        mapInstance.setWorkLocation(result.lat, result.lon, result.displayName);
-        searchInput.value = result.displayName;
-      });
-    } catch (err) {
-      showStatus(`Search error: ${err.message}`, 'error');
-    }
+    locationsList.appendChild(element);
+    return id;
   }
 
-  searchBtn.addEventListener('click', performSearch);
-  searchInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      performSearch();
-    }
-  });
+  addLocationBtn.addEventListener('click', () => addLocation(''));
 
-  // Close search results when clicking outside
-  document.addEventListener('click', (e) => {
-    const resultsEl = document.getElementById('search-results');
-    if (resultsEl && !resultsEl.contains(e.target) && e.target !== searchInput && e.target !== searchBtn) {
-      hideSearchResults();
-    }
-  });
+  // Add initial default location
+  addLocation('Work');
 
   // Calculate button
   const calculateBtn = document.getElementById('calculate-btn');
-  let lastGeojson = null;
+  let lastLocationData = null;
   let lastRawCrimes = null;
 
   calculateBtn.addEventListener('click', async () => {
-    const location = mapInstance.getWorkLocation();
-    if (!location) {
-      showStatus('Please set a work location first (click on the map or search).', 'error');
+    const locations = getAllLocations();
+    if (locations.length === 0) {
+      showStatus('Please add at least one location with coordinates set.', 'error');
       return;
     }
 
@@ -104,36 +147,52 @@ export function initApp() {
       return;
     }
 
-    const intervals = getSelectedIntervals();
-    if (intervals.length === 0) {
-      showStatus('Please select at least one time interval.', 'error');
-      return;
-    }
-
-    const profile = getSelectedMode();
-
     calculateBtn.disabled = true;
-    showStatus('Calculating commute areas...', 'info');
+    showStatus('Calculating commute areas for all locations...', 'info');
 
     try {
-      const geojson = await fetchIsochrones({
-        apiKey,
-        lat: location.lat,
-        lon: location.lon,
-        profile,
-        intervals,
-      });
+      // Fetch isochrones for each location in parallel
+      const isochronePromises = locations.map((loc) =>
+        fetchIsochrones({
+          apiKey,
+          lat: loc.lat,
+          lon: loc.lon,
+          profile: loc.mode,
+          intervals: [loc.maxMinutes],
+        }).then((geojson) => ({
+          locationId: loc.id,
+          name: loc.name,
+          colorIndex: loc.colorIndex,
+          geojson,
+        }))
+      );
 
-      mapInstance.showIsochrones(geojson);
-      updateLegend(intervals);
-      lastGeojson = geojson;
+      const locationResults = await Promise.all(isochronePromises);
+
+      // Show all isochrones on map
+      mapInstance.showMultiIsochrones(locationResults);
+
+      // Update legend
+      updateMultiLocationLegend(locations);
+
+      // Store for crime/liveability overlay
+      lastLocationData = locationResults;
 
       // Fetch crime data overlay if enabled
       if (isCrimeOverlayEnabled()) {
-        await loadCrimeOverlay(geojson);
+        // Combine all isochrone features for crime data fetching
+        const combinedGeojson = {
+          type: 'FeatureCollection',
+          features: locationResults.flatMap((r) => r.geojson.features || []),
+        };
+        await loadCrimeOverlay(combinedGeojson);
       }
 
-      showStatus('Commute areas calculated successfully!', 'success');
+      if (locations.length === 1) {
+        showStatus('Commute area calculated!', 'success');
+      } else {
+        showStatus(`Optimal areas calculated for ${locations.length} locations!`, 'success');
+      }
     } catch (err) {
       showStatus(`Error: ${err.message}`, 'error');
     } finally {
@@ -159,18 +218,30 @@ export function initApp() {
   }
 
   /**
-   * Render the liveability heatmap from isochrone GeoJSON and raw crimes.
+   * Render the liveability heatmap using multi-location data.
    */
   function renderLiveabilityOverlay() {
-    if (!lastGeojson || !lastRawCrimes) return;
+    if (!lastLocationData || !lastRawCrimes) return;
 
     const zoom = mapInstance.getZoom();
     const precision = zoom <= 10 ? 1 : zoom <= 12 ? 2 : 3;
-    const grid = buildLiveabilityGrid({
-      geojson: lastGeojson,
-      crimes: lastRawCrimes,
-      precision,
-    });
+
+    let grid;
+    if (lastLocationData.length === 1) {
+      // Single location: use original algorithm
+      grid = buildLiveabilityGrid({
+        geojson: lastLocationData[0].geojson,
+        crimes: lastRawCrimes,
+        precision,
+      });
+    } else {
+      // Multiple locations: use multi-location algorithm
+      grid = buildMultiLocationGrid({
+        locationData: lastLocationData,
+        crimes: lastRawCrimes,
+        precision,
+      });
+    }
 
     const cellSize = 1 / Math.pow(10, precision);
     const gridWithLevels = grid.map((cell) => ({
@@ -183,7 +254,7 @@ export function initApp() {
 
   /**
    * Load crime data and display the appropriate overlay on the map.
-   * @param {Object} geojson - Isochrone GeoJSON FeatureCollection.
+   * @param {Object} geojson - Combined isochrone GeoJSON FeatureCollection.
    */
   async function loadCrimeOverlay(geojson) {
     try {
@@ -205,7 +276,7 @@ export function initApp() {
       }
 
       if (crimes.length > 0) {
-        showCrimeStatus(`${crimes.length} crime${crimes.length !== 1 ? 's' : ''} reported in commute area`);
+        showCrimeStatus(`${crimes.length} crime${crimes.length !== 1 ? 's' : ''} reported in area`);
       } else {
         showCrimeStatus('No recent crime data available for this area');
       }
@@ -234,7 +305,7 @@ export function initApp() {
     if (lastRawCrimes && lastRawCrimes.length > 0) {
       if (mode === 'crime') {
         renderCrimeOverlay(lastRawCrimes);
-      } else if (mode === 'liveability' && lastGeojson) {
+      } else if (mode === 'liveability' && lastLocationData) {
         renderLiveabilityOverlay();
       }
     }
@@ -255,7 +326,7 @@ export function initApp() {
       return;
     }
 
-    if (lastGeojson && lastRawCrimes) {
+    if (lastLocationData && lastRawCrimes) {
       // Re-render with existing data
       if (mode === 'crime') {
         renderCrimeOverlay(lastRawCrimes);
@@ -266,8 +337,12 @@ export function initApp() {
         showLiveabilityLegend(LIVEABILITY_COLORS);
         mapInstance.showLiveabilityMapLegend(LIVEABILITY_COLORS);
       }
-    } else if (lastGeojson) {
-      loadCrimeOverlay(lastGeojson);
+    } else if (lastLocationData) {
+      const combinedGeojson = {
+        type: 'FeatureCollection',
+        features: lastLocationData.flatMap((r) => r.geojson.features || []),
+      };
+      loadCrimeOverlay(combinedGeojson);
     }
   });
 }

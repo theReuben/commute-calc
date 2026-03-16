@@ -4,6 +4,7 @@ import {
   pointInGeometry,
   getCommuteScore,
   buildLiveabilityGrid,
+  buildMultiLocationGrid,
   classifyLiveability,
 } from '../src/liveability.js';
 
@@ -189,6 +190,93 @@ describe('liveability', () => {
       if (crimeCell) {
         expect(crimeCell.score).toBeCloseTo(crimeCell.crimeScore, 5);
       }
+    });
+  });
+
+  describe('buildMultiLocationGrid', () => {
+    // Two overlapping isochrone areas
+    const locationA = {
+      name: 'Work',
+      geojson: {
+        features: [{
+          properties: { value: 1800 },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [[[-0.1, 51.4], [0.1, 51.4], [0.1, 51.6], [-0.1, 51.6], [-0.1, 51.4]]],
+          },
+        }],
+      },
+    };
+    const locationB = {
+      name: 'Airport',
+      geojson: {
+        features: [{
+          properties: { value: 1800 },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [[[0.0, 51.45], [0.2, 51.45], [0.2, 51.55], [0.0, 51.55], [0.0, 51.45]]],
+          },
+        }],
+      },
+    };
+
+    it('returns only cells reachable from ALL locations', () => {
+      const grid = buildMultiLocationGrid({
+        locationData: [locationA, locationB],
+        crimes: [],
+        precision: 1,
+      });
+      expect(grid.length).toBeGreaterThan(0);
+      // All cells should be reachable from both locations (commuteScore > 0)
+      grid.forEach((cell) => {
+        expect(cell.commuteScore).toBeGreaterThan(0);
+        expect(cell.perLocation).toHaveLength(2);
+        cell.perLocation.forEach((loc) => {
+          expect(loc.commuteScore).toBeGreaterThan(0);
+        });
+      });
+    });
+
+    it('returns fewer cells than single-location grid (intersection)', () => {
+      const singleGrid = buildLiveabilityGrid({
+        geojson: locationA.geojson,
+        crimes: [],
+        precision: 1,
+      });
+      const multiGrid = buildMultiLocationGrid({
+        locationData: [locationA, locationB],
+        crimes: [],
+        precision: 1,
+      });
+      expect(multiGrid.length).toBeLessThan(singleGrid.length);
+    });
+
+    it('returns empty array for empty input', () => {
+      expect(buildMultiLocationGrid({ locationData: [], crimes: [] })).toEqual([]);
+    });
+
+    it('includes perLocation breakdown in each cell', () => {
+      const grid = buildMultiLocationGrid({
+        locationData: [locationA, locationB],
+        crimes: [],
+        precision: 1,
+      });
+      if (grid.length > 0) {
+        expect(grid[0].perLocation[0].name).toBe('Work');
+        expect(grid[0].perLocation[1].name).toBe('Airport');
+      }
+    });
+
+    it('averages commute scores across locations', () => {
+      const grid = buildMultiLocationGrid({
+        locationData: [locationA, locationB],
+        crimes: [],
+        precision: 1,
+      });
+      grid.forEach((cell) => {
+        const avg = cell.perLocation.reduce((s, l) => s + l.commuteScore, 0) / cell.perLocation.length;
+        expect(cell.commuteScore).toBeCloseTo(avg, 5);
+      });
     });
   });
 });

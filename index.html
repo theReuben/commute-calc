@@ -17,52 +17,13 @@
   <div id="app">
     <div id="sidebar">
       <h1>Commute Calculator</h1>
-      <p class="subtitle">Visualize commutable areas from your workplace</p>
+      <p class="subtitle">Find areas with easy access to all your important locations</p>
 
       <div class="control-group">
-        <label for="location-search">Work Location</label>
-        <div class="search-container">
-          <input
-            type="text"
-            id="location-search"
-            placeholder="Search for an address..."
-            autocomplete="off"
-          />
-          <button id="search-btn" type="button" aria-label="Search">🔍</button>
-        </div>
-        <div id="search-results" class="search-results" hidden></div>
-        <p class="hint">Or click on the map to set your work location</p>
-      </div>
-
-      <div class="control-group">
-        <span id="transport-mode-label" class="group-label">Transport Mode</span>
-        <div class="transport-modes" id="transport-mode" role="group" aria-labelledby="transport-mode-label">
-          <button class="mode-btn active" data-mode="drive" title="Car">🚗 Car</button>
-          <button class="mode-btn" data-mode="transit" title="Public Transport">🚌 Public</button>
-          <button class="mode-btn" data-mode="bicycle" title="Cycling">🚲 Cycle</button>
-          <button class="mode-btn" data-mode="walk" title="Walking">🚶 Walk</button>
-        </div>
-      </div>
-
-      <div class="control-group">
-        <label>Time Intervals (minutes)</label>
-        <div class="time-intervals" id="time-intervals">
-          <label class="checkbox-label">
-            <input type="checkbox" value="10" checked /> 10 min
-          </label>
-          <label class="checkbox-label">
-            <input type="checkbox" value="20" checked /> 20 min
-          </label>
-          <label class="checkbox-label">
-            <input type="checkbox" value="30" checked /> 30 min
-          </label>
-          <label class="checkbox-label">
-            <input type="checkbox" value="45" /> 45 min
-          </label>
-          <label class="checkbox-label">
-            <input type="checkbox" value="60" /> 60 min
-          </label>
-        </div>
+        <label class="group-label">Locations</label>
+        <div id="locations-list"></div>
+        <button id="add-location-btn" class="secondary-btn" type="button">+ Add Location</button>
+        <p class="hint">Add places you need to reach (work, airport, school, etc.) then calculate to find optimal areas</p>
       </div>
 
       <div class="control-group">
@@ -82,7 +43,7 @@
       </div>
 
       <button id="calculate-btn" class="primary-btn" type="button">
-        Calculate Commute Areas
+        Calculate Optimal Areas
       </button>
 
       <div id="status" class="status" hidden></div>

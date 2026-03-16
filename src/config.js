@@ -45,6 +45,17 @@ export const LIVEABILITY_COLORS = {
 };
 
 /**
+ * Marker colors for multiple locations, cycling through these.
+ */
+export const LOCATION_COLORS = [
+  { color: '#c92a2a', fillColor: '#ff6b6b', label: 'Red' },
+  { color: '#5c940d', fillColor: '#94d82d', label: 'Green' },
+  { color: '#862e9c', fillColor: '#da77f2', label: 'Purple' },
+  { color: '#e67700', fillColor: '#ffd43b', label: 'Orange' },
+  { color: '#0b7285', fillColor: '#66d9e8', label: 'Teal' },
+];
+
+/**
  * Geoapify API key from environment variable (set via VITE_GEOAPIFY_API_KEY).
  * Falls back to empty string if not configured.
  */

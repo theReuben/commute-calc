@@ -235,6 +235,132 @@ body {
   border: 1px solid rgba(0, 0, 0, 0.15);
 }
 
+/* Multi-location cards */
+.location-card {
+  background: white;
+  border: 1px solid #dee2e6;
+  border-left: 4px solid #228be6;
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.location-card-header {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.location-name {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.remove-location-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  font-size: 1.1rem;
+  color: #868e96;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.remove-location-btn:hover {
+  background: #fff5f5;
+  color: #c92a2a;
+  border-color: #ffc9c9;
+}
+
+.location-search-row {
+  display: flex;
+  gap: 4px;
+}
+
+.location-search-input {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.location-search-btn {
+  padding: 6px 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.location-search-btn:hover {
+  background: #e9ecef;
+}
+
+.location-set-map-btn {
+  font-size: 0.75rem;
+  padding: 4px 8px;
+}
+
+.location-set-map-btn.active {
+  background: #e7f5ff;
+  border-color: #228be6;
+  color: #1864ab;
+}
+
+.location-settings-row {
+  display: flex;
+  gap: 6px;
+}
+
+.location-mode-select,
+.location-time-select {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  background: white;
+  cursor: pointer;
+}
+
+.location-coords {
+  font-size: 0.7rem;
+  color: #868e96;
+  padding: 2px 0;
+}
+
+.secondary-btn {
+  padding: 8px;
+  background: white;
+  color: #228be6;
+  border: 2px dashed #74c0fc;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.secondary-btn:hover {
+  background: #e7f5ff;
+  border-color: #228be6;
+}
+
 .crime-section {
   padding: 12px;
   background: white;
