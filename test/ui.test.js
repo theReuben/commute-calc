@@ -261,18 +261,13 @@ describe('ui', () => {
   });
 
   describe('showCrimeLegend', () => {
-    it('displays legend items for each density level', () => {
-      const colorMap = {
-        low: { fillColor: '#2b8a3e', label: 'Low crime' },
-        medium: { fillColor: '#f59f00', label: 'Medium crime' },
-        high: { fillColor: '#e03131', label: 'High crime' },
-        'very-high': { fillColor: '#7b2d8e', label: 'Very high crime' },
-      };
-      showCrimeLegend(colorMap);
+    it('shows the crime legend with a gradient bar', () => {
+      showCrimeLegend();
       const legend = document.getElementById('crime-legend');
       expect(legend.hidden).toBe(false);
-      const items = legend.querySelectorAll('.legend-item');
-      expect(items.length).toBe(4);
+      // New design uses a gradient bar; confirm Safe and High labels appear
+      expect(legend.textContent).toContain('Safe');
+      expect(legend.textContent).toContain('High crime');
     });
   });
 

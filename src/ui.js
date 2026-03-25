@@ -187,25 +187,25 @@ export function hideCrimeStatus() {
 }
 
 /**
- * Show the crime legend with density levels.
- * @param {Object} colorMap - Maps density names to {fillColor, label}.
+ * Show the crime legend with a gradient bar.
+ * @param {Object} colorMap - Accepted for compat but not used.
  */
 export function showCrimeLegend(colorMap) {
   const container = document.getElementById('crime-legend-items');
   if (!container) return;
 
   container.innerHTML = '';
-  ['low', 'medium', 'high', 'very-high'].forEach((level) => {
-    const config = colorMap[level];
-    if (!config) return;
-    const item = document.createElement('div');
-    item.className = 'legend-item';
-    item.innerHTML = `
-      <span class="legend-color" style="background: ${config.fillColor}"></span>
-      <span>${config.label}</span>
-    `;
-    container.appendChild(item);
-  });
+
+  const gradientBar = document.createElement('div');
+  gradientBar.style.cssText =
+    'height:12px;border-radius:3px;margin:4px 0;' +
+    'background:linear-gradient(to right,#2b8a3e,#f59f00,#e03131);';
+  container.appendChild(gradientBar);
+
+  const labels = document.createElement('div');
+  labels.style.cssText = 'display:flex;justify-content:space-between;font-size:10px;';
+  labels.innerHTML = '<span>Safe</span><span>Moderate</span><span>High crime</span>';
+  container.appendChild(labels);
 
   const legend = document.getElementById('crime-legend');
   if (legend) legend.hidden = false;

@@ -315,19 +315,13 @@ describe('map', () => {
       expect(mockControl.remove).toHaveBeenCalledTimes(1);
     });
 
-    it('renders an item for each density level', () => {
+    it('renders a gradient bar legend', () => {
       mapInstance.showCrimeMapLegend(colorMap);
       const container = mockControl.onAdd();
-      expect(container.querySelectorAll('.crime-legend-item').length).toBe(4);
-    });
-
-    it('includes the correct labels in the rendered legend', () => {
-      mapInstance.showCrimeMapLegend(colorMap);
-      const container = mockControl.onAdd();
-      expect(container.textContent).toContain('Low crime');
-      expect(container.textContent).toContain('Medium crime');
-      expect(container.textContent).toContain('High crime');
-      expect(container.textContent).toContain('Very high crime');
+      // New design uses a gradient bar instead of individual dot items
+      expect(container.textContent).toContain('Crime density');
+      expect(container.textContent).toContain('Safe');
+      expect(container.textContent).toContain('High');
     });
   });
 
