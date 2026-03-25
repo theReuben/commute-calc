@@ -29,6 +29,16 @@ export function createMap(elementId) {
   let pendingMapClickLocationId = null;
   let mapClickLocationCallback = null;
 
+  function haversineDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371000;
+    const φ1 = (lat1 * Math.PI) / 180;
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+    const a = Math.sin(Δφ / 2) ** 2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
   /**
    * Escape HTML special characters to prevent XSS.
    * @param {string} str
@@ -147,39 +157,53 @@ export function createMap(elementId) {
   }
 
   /**
-   * Display crime density markers on the map.
+   * Display crime density heatmap on the map.
    * @param {Array<{lat: number, lon: number, count: number, density: string, categories: Object}>} gridCells
    * @param {Object} colorMap - Maps density levels to {fillColor, color}.
+   * @param {Array} [rawCrimes] - Raw crime records for smooth heat density.
    */
-  function showCrimeOverlay(gridCells, colorMap) {
+  function showCrimeOverlay(gridCells, colorMap, rawCrimes) {
     clearCrimeOverlay();
 
-    gridCells.forEach((cell) => {
-      const colors = colorMap[cell.density] || { fillColor: '#adb5bd', color: '#495057' };
-      // Radius: base 4px, log-scaled by count (factor 3), capped at 16px
-      const radius = Math.min(4 + Math.log2(cell.count + 1) * 3, 16);
+    if (gridCells.length === 0) return;
 
+    // Use individual crime points for smooth heat density, fall back to grid cells
+    const heatPoints = rawCrimes && rawCrimes.length > 0
+      ? rawCrimes.map((c) => [c.lat, c.lon, 1])
+      : gridCells.map((cell) => [cell.lat, cell.lon, cell.count]);
+
+    L.heatLayer(heatPoints, {
+      radius: 22,
+      blur: 18,
+      maxZoom: 18,
+      max: 1.0,
+      minOpacity: 0.35,
+      gradient: {
+        0.0: '#2b8a3e',
+        0.4: '#f59f00',
+        1.0: '#e03131',
+      },
+    }).addTo(crimeLayer);
+
+    // Invisible interactive markers for tooltips and popups on each grid cell
+    gridCells.forEach((cell) => {
       const marker = L.circleMarker([cell.lat, cell.lon], {
-        radius,
-        fillColor: colors.fillColor,
-        color: colors.color,
-        weight: 1.5,
-        opacity: 0.8,
-        fillOpacity: 0.55,
+        radius: 16,
+        fillOpacity: 0,
+        opacity: 0,
+        weight: 0,
+        interactive: true,
       }).addTo(crimeLayer);
 
-      // Build category breakdown sorted by count
       const sortedCategories = Object.entries(cell.categories)
         .sort((a, b) => b[1] - a[1]);
 
-      // Tooltip on hover — compact summary with top crime type
       const topCat = sortedCategories[0];
       const tooltipText = topCat
         ? `${cell.count} crime${cell.count !== 1 ? 's' : ''} — ${escapeHtml(formatCrimeCategory(topCat[0]))}`
         : `${cell.count} crime${cell.count !== 1 ? 's' : ''}`;
       marker.bindTooltip(tooltipText, { direction: 'top', offset: [0, -6] });
 
-      // Popup on click — full category breakdown
       const allCategories = sortedCategories
         .map(([cat, n]) => `${escapeHtml(formatCrimeCategory(cat))}: ${n}`)
         .join('<br>');
@@ -197,8 +221,8 @@ export function createMap(elementId) {
   }
 
   /**
-   * Add a legend control to the map showing crime density levels.
-   * @param {Object} colorMap - Maps density names to {fillColor, color, label}.
+   * Add a legend control to the map showing crime density gradient.
+   * @param {Object} colorMap - Accepted for compat but not used.
    */
   function showCrimeMapLegend(colorMap) {
     clearCrimeMapLegend();
@@ -206,14 +230,22 @@ export function createMap(elementId) {
     crimeControl.onAdd = function () {
       const container = document.createElement('div');
       container.className = 'leaflet-control crime-map-legend';
-      ['low', 'medium', 'high', 'very-high'].forEach((level) => {
-        const config = colorMap[level];
-        if (!config) return;
-        const item = document.createElement('div');
-        item.className = 'crime-legend-item';
-        item.innerHTML = `<span class="crime-legend-dot" style="background:${config.fillColor};border-color:${config.color}"></span>${config.label}`;
-        container.appendChild(item);
-      });
+
+      const title = document.createElement('strong');
+      title.textContent = 'Crime density';
+      container.appendChild(title);
+
+      const gradientBar = document.createElement('div');
+      gradientBar.style.cssText =
+        'height:10px;border-radius:3px;margin:5px 0 3px;' +
+        'background:linear-gradient(to right,#2b8a3e,#f59f00,#e03131);';
+      container.appendChild(gradientBar);
+
+      const labels = document.createElement('div');
+      labels.style.cssText = 'display:flex;justify-content:space-between;font-size:10px;';
+      labels.innerHTML = '<span>Safe</span><span>Moderate</span><span>High</span>';
+      container.appendChild(labels);
+
       return container;
     };
     crimeControl.addTo(map);
@@ -402,6 +434,7 @@ export function createMap(elementId) {
     const marker = locationMarkers.get(locationId);
     const popupText = label ? escapeHtml(label) : `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
     marker.bindPopup(popupText);
+    marker._locationLabel = popupText;
     map.setView([lat, lon], Math.max(map.getZoom(), 12));
   }
 
@@ -480,6 +513,51 @@ export function createMap(elementId) {
     return pendingMapClickLocationId;
   }
 
+  /**
+   * Update a location marker's popup with nearby crime data.
+   * @param {string} locationId
+   * @param {number} lat
+   * @param {number} lon
+   * @param {Array} crimes - Raw crime records.
+   */
+  function updateLocationMarkerWithCrimes(locationId, lat, lon, crimes) {
+    if (!locationMarkers.has(locationId)) return;
+    const marker = locationMarkers.get(locationId);
+    const RADIUS_M = 1000;
+
+    const nearby = crimes
+      .map((c) => ({ ...c, dist: haversineDistance(lat, lon, c.lat, c.lon) }))
+      .filter((c) => c.dist <= RADIUS_M)
+      .sort((a, b) => a.dist - b.dist);
+
+    const baseLabel = marker._locationLabel || `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+
+    if (nearby.length === 0) {
+      marker.bindPopup(`${baseLabel}<br><em>No crimes recorded within 1km</em>`);
+      return;
+    }
+
+    const categories = {};
+    nearby.forEach((c) => {
+      categories[c.category] = (categories[c.category] || 0) + 1;
+    });
+    const sortedCats = Object.entries(categories).sort((a, b) => b[1] - a[1]);
+    const catsHtml = sortedCats
+      .slice(0, 6)
+      .map(([cat, n]) => `${escapeHtml(formatCrimeCategory(cat))}: ${n}`)
+      .join('<br>');
+
+    const nearest = nearby[0];
+    const farthest = nearby[nearby.length - 1];
+
+    marker.bindPopup(
+      `${baseLabel}<br>` +
+      `<strong>${nearby.length} crime${nearby.length !== 1 ? 's' : ''} within 1km</strong><br>` +
+      `Nearest: ${Math.round(nearest.dist)}m &nbsp; Farthest: ${Math.round(farthest.dist)}m<br>` +
+      `<br>${catsHtml}`
+    );
+  }
+
   return {
     map,
     setWorkLocation,
@@ -504,5 +582,6 @@ export function createMap(elementId) {
     showMultiIsochrones,
     setPendingMapClickLocation,
     getPendingMapClickLocationId,
+    updateLocationMarkerWithCrimes,
   };
 }

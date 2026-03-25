@@ -212,7 +212,7 @@ export function initApp() {
       density: classifyCrimeDensity(cell.count, maxCount),
     }));
 
-    mapInstance.showCrimeOverlay(gridWithDensity, CRIME_COLORS);
+    mapInstance.showCrimeOverlay(gridWithDensity, CRIME_COLORS, crimes);
   }
 
   /**
@@ -280,6 +280,14 @@ export function initApp() {
         renderLiveabilityOverlay(true);
         showLiveabilityLegend(LIVEABILITY_COLORS);
         mapInstance.showLiveabilityMapLegend(LIVEABILITY_COLORS);
+      }
+
+      // Update location markers with nearby crime summaries
+      if (crimes.length > 0) {
+        const locations = getAllLocations();
+        locations.forEach((loc) => {
+          mapInstance.updateLocationMarkerWithCrimes(loc.id, loc.lat, loc.lon, crimes);
+        });
       }
 
       if (crimes.length > 0) {
